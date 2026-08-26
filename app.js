@@ -1,3 +1,4 @@
+(function(){
 let posts = [
   {user:'maya.rose', name:'Maya Rose', avatar:'https://i.pravatar.cc/100?img=25', time:'2h', image:'pic-one', title:'Sunset picnic', location:'Prospect Park · Today, 5:00 PM', caption:'The blanket is packed and the sky is looking promising. Bringing snacks, sketchbooks, and room for a few more. Who’s in? ✦', likes:128, comments:14, joined:false},
   {user:'ari.makes', name:'Ari M.', avatar:'https://i.pravatar.cc/100?img=47', time:'5h', image:'pic-two', title:'Sunday people', location:'Red Hook · Sun, 10:30 AM', caption:'A little walk, a really good coffee, and some new neighborhood friends. Low-pressure plans are the best plans.', likes:86, comments:9, joined:false}
@@ -40,3 +41,4 @@ document.querySelectorAll('.trend').forEach(trend=>trend.onclick=()=>showToast('
 document.querySelector('#mobile-menu').onclick=()=>document.querySelector('.sidebar').classList.toggle('mobile-open');
 document.querySelector('#forgot-password').onclick=async e=>{e.preventDefault();const email=document.querySelector('#login-form input[name=email]').value;if(!email){showToast('Enter your email address first');return}if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});showToast(error?error.message:'Password reset email sent ✦')};
 document.addEventListener('click',e=>{const settings=e.target.closest('.settings-list button');if(settings)showToast(`${settings.textContent.replace('→','').trim()} selected`);if(e.target.closest('.edit-profile'))showToast('Profile editing is coming next ✦');const tab=e.target.closest('.profile-tabs button');if(tab){document.querySelectorAll('.profile-tabs button').forEach(item=>item.classList.remove('active'));tab.classList.add('active');const empty=document.querySelector('.profile-empty h3');if(empty)empty.textContent=`${tab.textContent} will appear here`}});
+})();
