@@ -1,52 +1,40 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sidequest | Find your next thing</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>upneXt | Make plans happen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="#"><span class="brand-mark">✦</span> sidequest</a>
-    <nav class="nav-links" aria-label="Main navigation">
-      <a class="active" href="#discover">Discover</a>
-      <a href="#how-it-works">How it works</a>
-    </nav>
-    <div class="account-actions"><button class="text-button">Log in</button><button class="avatar">JM</button></div>
-  </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="logo" href="#"><span>u</span>pneXt</a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-item active" href="#feed"><span class="nav-icon">⌂</span> Home</a><a class="nav-item" href="#discover"><span class="nav-icon">⌕</span> Discover</a><a class="nav-item" href="#notifications"><span class="nav-icon">♡</span> Notifications <b class="badge">3</b></a><a class="nav-item" href="#messages"><span class="nav-icon">✉</span> Messages</a><a class="nav-item" href="#profile"><span class="nav-icon avatar-mini">JM</span> Profile</a>
+      </nav>
+      <button class="post-button" id="open-modal">＋ <span>Post a plan</span></button>
+      <div class="sidebar-bottom"><a class="nav-item" href="#settings"><span class="nav-icon">⚙</span> Settings</a><p>© 2025 upneXt</p></div>
+    </aside>
 
-  <main>
-    <section class="hero" id="discover">
-      <div class="hero-copy">
-        <p class="eyebrow">Make plans. Meet people.</p>
-        <h1>Your next<br><em>thing</em> is out there.</h1>
-        <p class="hero-text">Find people who are into the same things you are. From spontaneous coffee runs to weekend adventures, there’s always room for one more.</p>
-        <button class="primary-button create-event"><span>＋</span> Post an event</button>
-      </div>
-      <div class="hero-art" aria-hidden="true">
-        <div class="sun"></div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-        <span class="spark spark-a">✦</span><span class="spark spark-b">✦</span><span class="spark spark-c">✧</span>
-        <div class="art-note note-one"><span>new friends</span><b>✦</b></div>
-        <div class="art-note note-two"><b>↗</b><span>good energy</span></div>
-        <div class="art-line"></div><div class="art-dot"></div>
-      </div>
-    </section>
+    <main class="feed-area" id="feed">
+      <header class="mobile-header"><a class="logo" href="#"><span>u</span>pneXt</a><button>☰</button></header>
+      <div class="feed-top"><h1>Your feed</h1><button class="feed-filter">For you <span>⌄</span></button></div>
+      <section class="stories" aria-label="Stories"><button class="story add-story"><span>＋</span><small>Your story</small></button><button class="story"><span class="story-ring ring-gold"><img src="https://i.pravatar.cc/100?img=47" alt="Ari"></span><small>ari.makes</small></button><button class="story"><span class="story-ring ring-purple"><img src="https://i.pravatar.cc/100?img=12" alt="Devon"></span><small>devonli</small></button><button class="story"><span class="story-ring ring-orange"><img src="https://i.pravatar.cc/100?img=32" alt="Sofia"></span><small>sofia.c</small></button><button class="story"><span class="story-ring ring-blue"><img src="https://i.pravatar.cc/100?img=59" alt="Max"></span><small>maxwell</small></button><button class="story"><span class="story-ring ring-pink"><img src="https://i.pravatar.cc/100?img=5" alt="Nina"></span><small>nina.park</small></button></section>
+      <section class="posts" id="posts"></section>
+    </main>
 
-    <section class="discover-section">
-      <div class="section-heading"><div><p class="eyebrow">Around you</p><h2>Plans worth leaving<br>the house for.</h2></div><button class="location-button">⌖ <span>Brooklyn, NY</span>⌄</button></div>
-      <div class="toolbar"><div class="filter-list" role="tablist"><button class="filter active" data-filter="all">All plans</button><button class="filter" data-filter="Today">Today</button><button class="filter" data-filter="This week">This week</button><button class="filter" data-filter="Outdoors">Outdoors</button><button class="filter" data-filter="Creative">Creative</button></div><button class="sort-button">Sort: <strong>Closest</strong> ↕</button></div>
-      <div class="content-grid"><div class="events-list" id="events-list"></div><aside class="side-panel"><div class="mini-map"><div class="map-label">YOU ARE HERE</div><span class="map-pin pin-one">✦</span><span class="map-pin pin-two">✦</span><span class="map-pin pin-three">✦</span><span class="map-pin pin-four">✦</span><div class="map-road road-a"></div><div class="map-road road-b"></div><div class="map-road road-c"></div></div><div class="tip-card"><span class="tip-icon">✺</span><div><p class="eyebrow">A little nudge</p><h3>Good things happen when you show up.</h3><p>Most people here are looking for the same thing: a reason to get out and connect.</p></div></div></aside></div>
-    </section>
+    <aside class="right-rail">
+      <div class="profile-switch"><img src="https://i.pravatar.cc/100?img=68" alt="Jamie Morgan"><div><strong>jamie.morgan</strong><small>Jamie Morgan</small></div><button>Switch</button></div>
+      <div class="rail-heading"><span>People to follow</span><a href="#">See all</a></div>
+      <div class="suggestions"><div class="suggestion"><img src="https://i.pravatar.cc/100?img=44" alt=""><div><strong>theo.walks</strong><small>New to upneXt</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose</strong><small>Followed by ari.makes</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=20" alt=""><div><strong>julesbuilds</strong><small>New to upneXt</small></div><button>Follow</button></div></div>
+      <div class="trending"><div class="rail-heading"><span>Trending near you</span><a href="#">View all</a></div><a class="trend" href="#"><small>01 · CREATIVE</small><strong>Brooklyn zine night</strong><span>42 people are going</span></a><a class="trend" href="#"><small>02 · OUTDOORS</small><strong>Sunrise at the cliffs</strong><span>18 people are going</span></a><a class="trend" href="#"><small>03 · FOOD & DRINK</small><strong>Sunday supper club</strong><span>12 people are going</span></a></div>
+    </aside>
+  </div>
 
-    <section class="how-section" id="how-it-works"><p class="eyebrow">No awkward group chats</p><h2>It’s really quite simple.</h2><div class="steps"><div class="step"><span>01</span><h3>Find a plan</h3><p>Browse low-key events from people in your area.</p></div><div class="step"><span>02</span><h3>Join the crew</h3><p>Tap join and get the details. No applications, no fuss.</p></div><div class="step"><span>03</span><h3>Have a good one</h3><p>Show up as you are. The rest tends to follow.</p></div></div></section>
-  </main>
-
-  <div class="modal-backdrop" id="modal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="close-modal" aria-label="Close">×</button><p class="eyebrow">Put it out there</p><h2 id="modal-title">What are you<br><em>up to?</em></h2><form id="event-form"><label>Plan title<input name="title" placeholder="e.g. Sunset picnic in the park" required></label><div class="form-row"><label>When<input name="when" placeholder="Sat, Aug 31 · 5:00 PM" required></label><label>Where<input name="where" placeholder="Prospect Park" required></label></div><label>Tell people a little more<textarea name="description" placeholder="What should people know?" rows="3"></textarea></label><div class="form-row"><label>Category<select name="category"><option>Social</option><option>Outdoors</option><option>Creative</option><option>Food & drink</option></select></label><label>Spots available<input name="spots" type="number" min="1" max="99" value="5"></label></div><button class="primary-button" type="submit">Post this plan <span>→</span></button></form></div></div>
-  <div class="toast" id="toast">You’re on the list! ✦</div>
+  <div class="modal-backdrop" id="modal"><div class="modal" role="dialog" aria-modal="true"><button class="close-modal" id="close-modal">×</button><p class="overline">Share something good</p><h2>What are you<br><em>upneXt?</em></h2><form id="post-form"><label>Plan title<input name="title" placeholder="e.g. Sunset picnic in the park" required></label><div class="form-row"><label>Date & time<input name="when" placeholder="Sat, Aug 31 · 5:00 PM" required></label><label>Location<input name="where" placeholder="Prospect Park" required></label></div><label>Caption<textarea name="caption" placeholder="Give people a reason to join..." rows="3"></textarea></label><button class="publish-button" type="submit">Publish plan <span>→</span></button></form></div></div>
+  <div class="toast" id="toast"></div>
   <script src="app.js"></script>
 </body>
 </html>
