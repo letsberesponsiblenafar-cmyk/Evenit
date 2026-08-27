@@ -5,7 +5,7 @@
   <title>E-V-E-N-I-T | Make plans happen</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=profile-editor">
 </head>
 <body>
   <div class="app-shell">
@@ -37,6 +37,6 @@
   <div class="login-backdrop" id="signup-modal"><div class="login-modal" role="dialog" aria-modal="true"><button class="close-modal" id="close-signup">×</button><p class="overline">Your corner of Evenit</p><h2>Create your<br><em>profile.</em></h2><form id="signup-form"><div class="form-row"><label>Full name<input name="full_name" placeholder="Jamie Morgan" required></label><label>Username<input name="username" placeholder="jamie.morgan" required></label></div><label>Email address<input name="email" type="email" placeholder="you@example.com" required></label><label>Password<input name="password" type="password" placeholder="At least 6 characters" minlength="6" required></label><div class="form-row"><label>Neighborhood<input name="neighborhood" placeholder="Brooklyn"></label><label>Favorite topic<select name="interest"><option value="Social">Social</option><option value="Outdoors">Outdoors</option><option value="Creative">Creative</option><option value="Food & drink">Food & drink</option></select></label></div><button class="publish-button" type="submit">Create profile <span>→</span></button></form><p class="signup-prompt">Already have an account? <a href="#" id="back-to-login">Log in</a></p></div></div>
   <div class="edit-backdrop" id="edit-modal"><div class="login-modal edit-modal" role="dialog" aria-modal="true"><button class="close-modal" id="close-edit">×</button><p class="overline">Make your profile yours</p><h2>Edit your<br><em>profile.</em></h2><form id="edit-form"><div class="form-row"><label>Full name<input name="full_name" required></label><label>Username<input name="username" required></label></div><label>Email address<input name="email" type="email" readonly></label><div class="form-row"><label>College <span class="optional">optional</span><input name="college" placeholder="Your college"></label><label>Enrollment ID <span class="optional">optional</span><input name="enrollment_id" placeholder="Your ID"></label></div><fieldset><legend>College details visibility</legend><label class="visibility-choice"><input type="radio" name="college_visibility" value="private" checked> Private <small>Only you can see these details</small></label><label class="visibility-choice"><input type="radio" name="college_visibility" value="public"> Public <small>Show them on your profile</small></label></fieldset><button class="publish-button" type="submit">Save profile <span>✓</span></button></form></div></div>
   <div class="toast" id="toast"></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=64c4c52"></script><script src="app.js?v=64c4c52"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=profile-editor"></script><script src="app.js?v=profile-editor"></script>
 </body>
 </html>
