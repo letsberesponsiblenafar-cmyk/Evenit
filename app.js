@@ -46,8 +46,8 @@ document.querySelector('#mobile-menu').onclick=()=>document.querySelector('.side
 document.querySelector('#forgot-password').onclick=async e=>{e.preventDefault();const email=document.querySelector('#login-form input[name=email]').value;if(!email){showToast('Enter your email address first');return}if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});showToast(error?error.message:'Password reset email sent ✦')};
 document.addEventListener('click',e=>{const settings=e.target.closest('.settings-list button');if(settings)showToast(`${settings.textContent.replace('→','').trim()} selected`);if(e.target.closest('.edit-profile'))showToast('Profile editing is coming next ✦');const tab=e.target.closest('.profile-tabs button');if(tab){document.querySelectorAll('.profile-tabs button').forEach(item=>item.classList.remove('active'));tab.classList.add('active');const empty=document.querySelector('.profile-empty h3');if(empty)empty.textContent=`${tab.textContent} will appear here`}});
 document.addEventListener('click',e=>{const tab=e.target.closest('.profile-tabs button');if(tab)renderProfileTab(tab)});
-document.title='E-V-E-N-I-T | Make plans happen';
-function replaceBrand(){document.querySelectorAll('body *').forEach(element=>element.childNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('upneXt'))node.nodeValue=node.nodeValue.replaceAll('upneXt','E-V-E-N-I-T')}))}
+document.title='Evenit | Make plans happen';
+function replaceBrand(){document.querySelectorAll('body *').forEach(element=>element.childNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('upneXt'))node.nodeValue=node.nodeValue.replaceAll('upneXt','Evenit')}))}
 replaceBrand();
 const brandObserver=new MutationObserver(replaceBrand);
 brandObserver.observe(document.body,{childList:true,subtree:true});
