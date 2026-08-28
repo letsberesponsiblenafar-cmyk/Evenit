@@ -1,6 +1,6 @@
 (function(){
   const stateKey='evenitNavigation';
-  const pages=new Set(['home','discover','notifications','messages','profile','settings']);
+  const pages=new Set(['home','discover','groups','notifications','messages','profile','settings']);
   let currentRoute;
   let replaying=false;
   let transition=0;
