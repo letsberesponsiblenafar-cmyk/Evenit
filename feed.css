@@ -11,6 +11,7 @@
 }
 
 html{background:var(--board-bg)}
+*[hidden]{display:none!important}
 body{background:var(--board-bg);color:var(--board-ink);font-family:'DM Sans',sans-serif}
 body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.32;background-image:linear-gradient(90deg,#1c292608 1px,transparent 1px),linear-gradient(#1c292608 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,#000,transparent 75%);z-index:-1}
 .app-shell{max-width:1360px;grid-template-columns:220px minmax(0,680px) 250px;gap:50px;padding:0 28px}
