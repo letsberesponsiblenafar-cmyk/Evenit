@@ -6,7 +6,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="icon" href="logo.svg" type="image/svg+xml">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=events-v2"><link rel="stylesheet" href="feed.css?v=plan-board-v1"><link rel="stylesheet" href="composer.css?v=composer-v1">
+  <link rel="stylesheet" href="style.css?v=events-v2"><link rel="stylesheet" href="feed.css?v=plan-board-v1"><link rel="stylesheet" href="composer.css?v=entry-pass-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -41,7 +41,7 @@
   <div class="toast" id="toast"></div>
   <div class="entry-pass-backdrop" id="entry-pass-modal"><div class="entry-pass-modal" role="dialog" aria-modal="true" aria-labelledby="entry-pass-title"><button class="close-modal" id="close-entry-pass" aria-label="Close entry pass">×</button><p class="overline">Confirmed entry</p><h2 id="entry-pass-title">Your entry pass</h2><p class="entry-pass-details" id="entry-pass-details"></p><div class="entry-pass-card"><div id="entry-pass-qr" aria-label="QR entry pass"></div><p id="entry-pass-state">Ready for check-in</p></div><p class="entry-pass-instruction">Show this QR at the door. The host checks it once against the event.</p></div></div>
   <div class="entry-verification-backdrop" id="entry-verification-modal"><div class="entry-verification-modal" role="dialog" aria-modal="true" aria-labelledby="entry-verification-title"><button class="close-modal" id="close-entry-verification" aria-label="Close entry check">×</button><p class="overline">Door check</p><h2 id="entry-verification-title">Entry check</h2><p class="verification-state" id="entry-verification-state"></p><p class="verification-guest" id="entry-verification-guest"></p><p class="verification-details" id="entry-verification-details"></p><p class="entry-verification-help">Only the event host can verify a pass. Each confirmed pass can be checked in once.</p></div></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=events-v2"></script><script src="navigation.js?v=navigation-v1"></script><script src="app.js?v=events-v2"></script><script src="composer.js?v=composer-v1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js?v=events-v2"></script><script src="navigation.js?v=navigation-v1"></script><script src="app.js?v=entry-pass-v1"></script><script src="composer.js?v=entry-pass-v1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </body>
 </html>
