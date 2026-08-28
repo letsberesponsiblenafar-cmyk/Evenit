@@ -4,8 +4,8 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>E-V-E-N-I-T | Make plans happen</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=events-v2">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=events-v2"><link rel="stylesheet" href="feed.css?v=plan-board-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -20,15 +20,15 @@
 
     <main class="feed-area" id="feed">
       <header class="mobile-header"><a class="logo" href="#">Evenit</a><div><button id="open-login-mobile">Log in</button><button id="mobile-menu">☰</button></div></header>
-      <div class="feed-top"><h1>Your feed</h1><button class="feed-filter">For you <span>⌄</span></button></div>
-      <section class="stories" aria-label="Stories"><button class="story add-story"><span>＋</span><small>Your story</small></button><button class="story"><span class="story-ring ring-gold"><img src="https://i.pravatar.cc/100?img=47" alt="Ari"></span><small>ari.makes</small></button><button class="story"><span class="story-ring ring-purple"><img src="https://i.pravatar.cc/100?img=12" alt="Devon"></span><small>devonli</small></button><button class="story"><span class="story-ring ring-orange"><img src="https://i.pravatar.cc/100?img=32" alt="Sofia"></span><small>sofia.c</small></button><button class="story"><span class="story-ring ring-blue"><img src="https://i.pravatar.cc/100?img=59" alt="Max"></span><small>maxwell</small></button><button class="story"><span class="story-ring ring-pink"><img src="https://i.pravatar.cc/100?img=5" alt="Nina"></span><small>nina.park</small></button></section>
+       <div class="feed-top"><div><p class="feed-kicker">A living calendar</p><h1>The plan board</h1></div><button class="feed-filter">For you <span>⌄</span></button></div>
+       <section class="stories" aria-label="Plan pulse"><div class="pulse-intro"><span class="pulse-dot"></span><small>Plan pulse</small><strong>Ideas in motion</strong></div><button class="story add-story"><span class="pulse-plus">＋</span><strong>Start a plan</strong><small>Put something on the board</small></button><button class="story pulse-card"><span class="pulse-time">05:30 PM</span><strong>Sunset picnic</strong><small>Prospect Park</small></button><button class="story pulse-card"><span class="pulse-time">SAT · 10:30 AM</span><strong>People walk</strong><small>Red Hook</small></button><button class="story pulse-card"><span class="pulse-time">SUN · 07:00 PM</span><strong>Zine night</strong><small>Brooklyn</small></button><button class="story pulse-card"><span class="pulse-time">NEXT UP</span><strong>Bring a friend</strong><small>Make an open invite</small></button></section>
       <section class="posts" id="posts"></section><section class="page-view" id="page-view" hidden></section>
     </main>
 
     <aside class="right-rail">
-      <div class="rail-heading"><span>People to follow</span><a href="#">See all</a></div>
-      <div class="suggestions"><div class="suggestion"><img src="https://i.pravatar.cc/100?img=44" alt=""><div><strong>theo.walks</strong><small>New to Evenit</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose</strong><small>Followed by ari.makes</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=20" alt=""><div><strong>julesbuilds</strong><small>New to Evenit</small></div><button>Follow</button></div></div>
-      <div class="trending"><div class="rail-heading"><span>Trending near you</span><a href="#">View all</a></div><a class="trend" href="#"><small>01 · CREATIVE</small><strong>Brooklyn zine night</strong><span>42 people are going</span></a><a class="trend" href="#"><small>02 · OUTDOORS</small><strong>Sunrise at the cliffs</strong><span>18 people are going</span></a><a class="trend" href="#"><small>03 · FOOD & DRINK</small><strong>Sunday supper club</strong><span>12 people are going</span></a></div>
+       <div class="rail-heading"><span>People making plans</span><a href="#">See all</a></div>
+       <div class="suggestions"><div class="suggestion"><img src="https://i.pravatar.cc/100?img=44" alt=""><div><strong>theo.walks</strong><small>New to Evenit</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose</strong><small>Followed by ari.makes</small></div><button>Follow</button></div><div class="suggestion"><img src="https://i.pravatar.cc/100?img=20" alt=""><div><strong>julesbuilds</strong><small>New to Evenit</small></div><button>Follow</button></div></div>
+       <div class="trending"><div class="rail-heading"><span>Plan radar</span><a href="#">View all</a></div><a class="trend" href="#"><small>01 · CREATIVE</small><strong>Brooklyn zine night</strong><span>42 people are going</span></a><a class="trend" href="#"><small>02 · OUTDOORS</small><strong>Sunrise at the cliffs</strong><span>18 people are going</span></a><a class="trend" href="#"><small>03 · FOOD & DRINK</small><strong>Sunday supper club</strong><span>12 people are going</span></a></div>
     </aside>
   </div>
 
