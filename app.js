@@ -121,11 +121,13 @@ const pageTemplates={
   groups:`<div class="page-header"><p class="overline">Private circles</p><h2>Groups</h2><p style="color:#6E6E73;font-size:13px;line-height:1.5;margin:8px 0 18px">Telegram-like, private, only members see messages. Create up to 150.</p><button class="publish-button" id="open-group-create" style="width:auto;border-radius:999px">＋ Create group</button></div><div id="groups-list" class="groups-list" style="margin-top:18px"></div>`,
   settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2></div><div class="settings-list"><button>Account details <span>→</span></button><button>Notification preferences <span>→</span></button><button>Privacy and safety <span>→</span></button><button>Help center <span>→</span></button></div>`,
 };
-  function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your upneXt story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile</button>':''}</div><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Joined</button><button>Saved</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));applyAdminContent();applyAdminStyles()}
+  function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your upneXt story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile</button>':''}</div><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Joined</button><button>Saved</button><button>Lived On</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));applyAdminContent();applyAdminStyles()}
   function renderDiscover(){pageView.innerHTML=pageTemplates.discover+`<div class="discover-results"><div class="section-label">Live plans from the community</div>${posts.map((post,index)=>`<article class="discover-result" data-plan-id="${escapeHtml(post.id||'')}"><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</small><p>${escapeHtml(post.caption)}</p></div><div class="discover-actions"><button class="join-plan${post.membershipStatus==='confirmed'?' joined':post.membershipStatus==='waitlisted'?' waitlisted':''}" data-index="${index}">${post.membershipStatus==='confirmed'?'Confirmed ✓':post.membershipStatus==='waitlisted'?'On waitlist':'Join in'} <span>→</span></button>${post.isOwner?`<button class="insights-button" data-insights-id="${escapeHtml(post.id)}">Insights <span>↗</span></button>`:''}${post.entryPass?`<button type="button" class="entry-pass-button discover-pass-button" data-plan-id="${escapeHtml(post.id)}">View QR pass ↗</button>`:''}</div></article>`).join('')}</div>`;document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));document.querySelectorAll('.discover-pass-button').forEach(button=>button.onclick=()=>{const post=posts.find(item=>item.id===button.dataset.planId);if(post)openEntryPass(post,post.entryPass)});applyAdminContent();applyAdminStyles()}
  async function renderNotifications(){if(!supabase||!currentUser){pageView.innerHTML=pageTemplates.notifications;applyAdminContent();applyAdminStyles();return}const {data}=await supabase.from('notifications').select('message,created_at').order('created_at',{ascending:false}).limit(20);pageView.innerHTML=`<div class="page-header"><p class="overline">Stay in the loop</p><h2>Notifications</h2></div><div class="activity-list">${data?.length?data.map(item=>`<div class="activity"><span class="notification-mark">✦</span><p>${item.message}<small>${new Date(item.created_at).toLocaleString()}</small></p></div>`).join(''):'<div class="empty-message">No notifications yet.<br><span>Join a plan or follow a topic to get updates.</span></div>'}</div>`;applyAdminContent();applyAdminStyles()}
 function setPage(page){homeElements.forEach(element=>element.hidden=page!=='home');pageView.hidden=page==='home';document.querySelectorAll('[data-page]').forEach(link=>link.classList.toggle('active',link.dataset.page===page));if(page!=='home'){if(page==='profile')renderProfile();else if(page==='discover')renderDiscover();else if(page==='notifications')renderNotifications();else if(page==='groups')renderGroups();else if(page==='messages'){pageView.innerHTML=pageTemplates.messages; loadGroupMessagesPreview();}else pageView.innerHTML=pageTemplates[page]||pageTemplates.settings}window.scrollTo({top:0,behavior:'smooth'})}
-  function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();const items=key.includes('joined')?posts.filter(post=>post.joined):key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);content.innerHTML=items.length?items.map(post=>{const owner=post.user_id===currentUser?.id;const attendedBadge=post.entryPass?.checked_in_at?' · Attended ✓':'';return`<button class="profile-event ${post.entryPass?.checked_in_at?'is-attended':''}" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>✦</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined${post.entryPass?.checked_in_at?' · Attended ✓':''}</small></div>${owner?'<b>Insights ↗</b>':''}</button>`}).join(''):`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open')}
+  function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();
+if(key.includes('lived')){ renderLivedOn(content); return; }
+const items=key.includes('joined')?posts.filter(post=>post.joined):key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);content.innerHTML=items.length?items.map(post=>{const owner=post.user_id===currentUser?.id;const attendedBadge=post.entryPass?.checked_in_at?' · Attended ✓':'';return`<button class="profile-event ${post.entryPass?.checked_in_at?'is-attended':''}" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>✦</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined${post.entryPass?.checked_in_at?' · Attended ✓':''}</small></div>${owner?'<b>Insights ↗</b>':''}</button>`}).join(''):`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open')}
 document.querySelectorAll('[data-page]').forEach(link=>link.onclick=e=>{e.preventDefault();setPage(link.dataset.page)});
 if(supabase){supabase.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;updateAccountUI();loadPlans()});supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAccountUI();if(session?.user&&pageView&&!pageView.hidden)renderProfile()})}else{updateAccountUI();loadPlans()}
 const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
@@ -530,6 +532,89 @@ loadPlans = async()=>{ await _origLoadPlans2(); await loadNearbyPeople(); await 
 
 // Fix create plan top button already handled via story, but also ensure open-modal works on top
 document.querySelector('#open-modal')?.addEventListener('click', ()=>{ modal.classList.add('open'); });
+
+
+
+async function renderLivedOn(container){
+  if(!supabase||!currentUser){ container.innerHTML='<div class="lived-empty" style="padding:32px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">Log in to see your lived events.</div>'; return; }
+  container.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading lived...</div>';
+  const {data,error}=await supabase.rpc('get_lived_on',{p_user_id:currentUser.id});
+  if(error){ container.innerHTML=`<div style="padding:20px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
+  if(!data||!data.length){
+    container.innerHTML=`<div class="lived-empty" style="padding:32px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font:700 16px -apple-system,sans-serif;letter-spacing:-0.03em;color:#1D1D1F">No lived events yet</div><div style="font-size:12px;margin-top:6px;line-height:1.5">Attend an event and get checked in by the host. After it ends, share your aftermath here.</div></div>`;
+    return;
+  }
+  container.innerHTML='<div class="lived-intro" style="padding:12px 0 14px;border-bottom:1px solid #E8E8ED;margin-bottom:14px"><p style="margin:0;color:#6E6E73;font:500 11px -apple-system,sans-serif;letter-spacing:0.06em;text-transform:uppercase">Lived On — aftermath</p><p style="margin:6px 0 0;color:#6E6E73;font-size:12px;line-height:1.5">Photos, videos, PDFs, notes and hashtags from events you lived.</p></div>' + (await Promise.all(data.map(async row=>{
+    const {data:aft}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id: row.plan_id});
+    const count=aft?aft.length:0;
+    const canPost=row.starts_at && new Date(row.starts_at) <= new Date();
+    return `<div class="lived-card" data-plan-id="${escapeHtml(row.plan_id)}" style="background:#fff;border:1px solid #E8E8ED;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,0.04)"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div style="font:600 11px -apple-system,sans-serif;letter-spacing:0.06em;text-transform:uppercase;color:#5E5CE6">Lived · ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div><div style="font:700 16px -apple-system,sans-serif;letter-spacing:-0.02em;margin:6px 0 4px">${escapeHtml(row.title)}</div><div style="font-size:12px;color:#6E6E73">${escapeHtml(row.location||'')} · ${count} aftermath ${count===1?'post':'posts'}</div></div><button class="publish-button" data-aftermath-plan="${escapeHtml(row.plan_id)}" style="border-radius:999px;padding:10px 16px;font-size:13px;flex:0 0 auto;${canPost?'':'opacity:0.5;pointer-events:none'}" title="${canPost?'Add aftermath':'Event not yet ended'}">＋ Aftermath</button></div><div class="aftermath-feed" id="aftermath-feed-${escapeHtml(row.plan_id)}" style="margin-top:12px;display:grid;gap:10px">${count? aft.map(post=>{
+      const mediaPlaceholder=''; // media will be fetched separately if needed
+      const tags=(post.hashtags||[]).map(h=>`<a href="#" style="color:#5E5CE6;text-decoration:none">#${escapeHtml(h)}</a>`).join(' ');
+      return `<div style="border:1px solid #E8E8ED;border-radius:14px;padding:12px 14px;background:#F5F5F7"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><img src="${escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68')}" style="width:28px;height:28px;border-radius:50%;object-fit:cover"><strong style="font:600 13px -apple-system,sans-serif">${escapeHtml(post.full_name||post.username||'Member')}</strong><small style="color:#6E6E73;font-size:11px">${formatPostTime(post.created_at)}</small></div><div style="font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(post.body)}</div><div style="font-size:12px;margin-top:6px">${tags}</div><div class="aftermath-media" data-post-id="${escapeHtml(post.id)}" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"></div></div>`;
+    }).join('') : '<div style="padding:14px;text-align:center;color:#6E6E73;font-size:12px;border:1px dashed #E8E8ED;border-radius:12px;background:#fff">No aftermath yet. Be first to share photos/videos/PDFs.</div>'}</div></div>`;
+  }))).join('');
+  // wire aftermath buttons
+  container.querySelectorAll('[data-aftermath-plan]').forEach(b=>b.onclick=()=>openAftermathComposer(b.dataset.aftermathPlan));
+  // load media for each post
+  for(const row of data){
+    const {data:aft}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id: row.plan_id});
+    for(const post of (aft||[])){
+      const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id', post.id);
+      const el=container.querySelector(`[data-post-id="${post.id}"]`);
+      if(el && media && media.length){
+        el.innerHTML=media.map(m=>{
+          if(m.file_type==='image') return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(m.file_url)}" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #E8E8ED"></a>`;
+          if(m.file_type==='video') return `<video src="${escapeHtml(m.file_url)}" controls style="width:160px;height:110px;border-radius:10px;background:#000"></video>`;
+          if(m.file_type==='pdf') return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:10px;background:#fff;font:600 12px -apple-system,sans-serif;text-decoration:none;color:#1D1D1F">📄 ${escapeHtml(m.file_name||'PDF')}</a>`;
+          return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer" style="font-size:12px;color:#5E5CE6">${escapeHtml(m.file_name||m.file_url)}</a>`;
+        }).join('');
+      }
+    }
+  }
+}
+let activeAftermathPlanId=null;
+function openAftermathComposer(planId){
+  activeAftermathPlanId=planId;
+  const m=document.querySelector('#aftermath-modal');
+  if(m){ m.classList.add('open'); m.querySelector('#aftermath-status').textContent=''; m.querySelector('#aftermath-body').value=''; m.querySelector('#aftermath-tags').value=''; const list=m.querySelector('#aftermath-file-list'); if(list) list.innerHTML=''; const inp=m.querySelector('#aftermath-files'); if(inp) inp.value=''; }
+}
+async function submitAftermath(e){
+  e.preventDefault();
+  if(!supabase||!currentUser){ showToast('Log in'); return; }
+  if(!activeAftermathPlanId){ showToast('Pick an event'); return; }
+  const body=document.querySelector('#aftermath-body')?.value?.trim();
+  const tagsRaw=document.querySelector('#aftermath-tags')?.value||'';
+  const hashtags=tagsRaw.split(/[#,\s]+/).map(s=>s.trim().replace(/^#/,'')).filter(Boolean).slice(0,10);
+  const files=document.querySelector('#aftermath-files')?.files;
+  const status=document.querySelector('#aftermath-status');
+  if(!body){ status.textContent='Write something'; return; }
+  status.textContent='Posting...';
+  const {data:post,error}=await supabase.from('plan_aftermath_posts').insert({plan_id:activeAftermathPlanId, author_id:currentUser.id, body, hashtags}).select('id').single();
+  if(error){ status.textContent=error.message; showToast(error.message); return; }
+  if(files && files.length){
+    for(const file of files){
+      const ext=file.name.split('.').pop().toLowerCase();
+      const type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':ext==='pdf'?'pdf':'other';
+      const path=`${currentUser.id}/${post.id}-${Date.now()}-${file.name}`;
+      const {error:upErr}=await supabase.storage.from('aftermath-media').upload(path, file, {upsert:true, contentType:file.type});
+      if(upErr){ status.textContent=upErr.message; continue; }
+      const {data:pub}=supabase.storage.from('aftermath-media').getPublicUrl(path);
+      await supabase.from('plan_aftermath_media').insert({post_id:post.id, file_url:pub.publicUrl, file_type:type, file_name:file.name});
+    }
+  }
+  status.textContent='Posted ✓';
+  showToast('Aftermath shared');
+  setTimeout(()=>{ document.querySelector('#aftermath-modal')?.classList.remove('open'); const tab=document.querySelector('.profile-tabs button:nth-child(4)'); if(tab) renderProfileTab(tab); }, 600);
+}
+document.querySelector('#close-aftermath-modal')?.addEventListener('click', ()=>document.querySelector('#aftermath-modal')?.classList.remove('open'));
+document.querySelector('#aftermath-modal')?.addEventListener('click', e=>{ if(e.target.id==='aftermath-modal') e.currentTarget.classList.remove('open'); });
+document.querySelector('#aftermath-form')?.addEventListener('submit', submitAftermath);
+document.querySelector('#aftermath-files')?.addEventListener('change', e=>{
+  const list=document.querySelector('#aftermath-file-list');
+  if(!list) return;
+  list.innerHTML=[...e.target.files].map(f=>`<span style="font:500 11px -apple-system,sans-serif;background:#F5F5F7;border:1px solid #E8E8ED;border-radius:999px;padding:6px 10px">${escapeHtml(f.name)} · ${(f.size/1024).toFixed(0)}KB</span>`).join('');
+});
 
 
 if(supabase)supabase.auth.getSession().then(({data})=>{if(data.session?.user)loadEntryPasses()});

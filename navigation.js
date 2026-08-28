@@ -68,7 +68,7 @@
     const buttons=[...document.querySelectorAll('.profile-tabs button')];
     return buttons.find(button=>{
       const text=button.textContent.toLowerCase();
-      return tab==='joined'?text.includes('joined'):tab==='saved'?text.includes('saved'):text.includes('your plans');
+      return tab==='joined'?text.includes('joined'):tab==='saved'?text.includes('saved'):tab==='lived'?text.includes('lived'):text.includes('your plans');
     });
   }
 
@@ -116,7 +116,7 @@
 
   function profileTabName(button){
     const text=button.textContent.toLowerCase();
-    return text.includes('joined')?'joined':text.includes('saved')?'saved':'your-plans';
+    return text.includes('joined')?'joined':text.includes('saved')?'saved':text.includes('lived')?'lived':'your-plans';
   }
 
   window.addEventListener('popstate',event=>{
