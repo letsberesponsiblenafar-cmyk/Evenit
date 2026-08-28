@@ -35,7 +35,7 @@ const pageTemplates={
   settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2></div><div class="settings-list"><button>Account details <span>→</span></button><button>Notification preferences <span>→</span></button><button>Privacy and safety <span>→</span></button><button>Help center <span>→</span></button></div>`,
 };
   function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your upneXt story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile</button>':''}</div><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Joined</button><button>Saved</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));applyAdminContent();applyAdminStyles()}
-  function renderDiscover(){pageView.innerHTML=pageTemplates.discover+`<div class="discover-results"><div class="section-label">Live plans from the community</div>${posts.map((post,index)=>`<article class="discover-result" data-plan-id="${escapeHtml(post.id||'')}"><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</small><p>${escapeHtml(post.caption)}</p></div><div class="discover-actions"><button class="join-plan${post.membershipStatus==='confirmed'?' joined':post.membershipStatus==='waitlisted'?' waitlisted':''}" data-index="${index}">${post.membershipStatus==='confirmed'?'Confirmed ✓':post.membershipStatus==='waitlisted'?'On waitlist':'Join in'} <span>→</span></button>${post.isOwner?`<button class="insights-button" data-insights-id="${escapeHtml(post.id)}">Insights <span>↗</span></button>`:''}</div></article>`).join('')}</div>`;document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));applyAdminContent();applyAdminStyles()}
+  function renderDiscover(){pageView.innerHTML=pageTemplates.discover+`<div class="discover-results"><div class="section-label">Live plans from the community</div>${posts.map((post,index)=>`<article class="discover-result" data-plan-id="${escapeHtml(post.id||'')}"><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</small><p>${escapeHtml(post.caption)}</p></div><div class="discover-actions"><button class="join-plan${post.membershipStatus==='confirmed'?' joined':post.membershipStatus==='waitlisted'?' waitlisted':''}" data-index="${index}">${post.membershipStatus==='confirmed'?'Confirmed ✓':post.membershipStatus==='waitlisted'?'On waitlist':'Join in'} <span>→</span></button>${post.isOwner?`<button class="insights-button" data-insights-id="${escapeHtml(post.id)}">Insights <span>↗</span></button>`:''}${post.entryPass?`<button type="button" class="entry-pass-button discover-pass-button" data-plan-id="${escapeHtml(post.id)}">View QR pass ↗</button>`:''}</div></article>`).join('')}</div>`;document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));document.querySelectorAll('.discover-pass-button').forEach(button=>button.onclick=()=>{const post=posts.find(item=>item.id===button.dataset.planId);if(post)openEntryPass(post,post.entryPass)});applyAdminContent();applyAdminStyles()}
  async function renderNotifications(){if(!supabase||!currentUser){pageView.innerHTML=pageTemplates.notifications;applyAdminContent();applyAdminStyles();return}const {data}=await supabase.from('notifications').select('message,created_at').order('created_at',{ascending:false}).limit(20);pageView.innerHTML=`<div class="page-header"><p class="overline">Stay in the loop</p><h2>Notifications</h2></div><div class="activity-list">${data?.length?data.map(item=>`<div class="activity"><span class="notification-mark">✦</span><p>${item.message}<small>${new Date(item.created_at).toLocaleString()}</small></p></div>`).join(''):'<div class="empty-message">No notifications yet.<br><span>Join a plan or follow a topic to get updates.</span></div>'}</div>`;applyAdminContent();applyAdminStyles()}
 function setPage(page){homeElements.forEach(element=>element.hidden=page!=='home');pageView.hidden=page==='home';document.querySelectorAll('[data-page]').forEach(link=>link.classList.toggle('active',link.dataset.page===page));if(page!=='home'){if(page==='profile')renderProfile();else if(page==='discover')renderDiscover();else if(page==='notifications')renderNotifications();else pageView.innerHTML=pageTemplates[page]||pageTemplates.settings}window.scrollTo({top:0,behavior:'smooth'})}
   function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();const items=key.includes('joined')?posts.filter(post=>post.joined):key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);content.innerHTML=items.length?items.map(post=>{const owner=post.user_id===currentUser?.id;return`<button class="profile-event" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>✦</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</small></div>${owner?'<b>Insights ↗</b>':''}</button>`}).join(''):`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open')}
@@ -80,6 +80,115 @@ loadSiteSettings();
   document.querySelectorAll('[data-page]').forEach(link=>link.addEventListener('click',()=>setTimeout(()=>{applyAdminContent();applyAdminStyles();refreshPageCopy()},150)));
  function replaceBrand(){document.querySelectorAll('body *').forEach(element=>element.childNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('upneXt'))node.nodeValue=node.nodeValue.replaceAll('upneXt','Evenit')}))}
 replaceBrand();
-const brandObserver=new MutationObserver(replaceBrand);
-brandObserver.observe(document.body,{childList:true,subtree:true});
-})();
+ const brandObserver=new MutationObserver(replaceBrand);
+ brandObserver.observe(document.body,{childList:true,subtree:true});
+ const entryPassModal=document.querySelector('#entry-pass-modal');
+ const entryPassTitle=document.querySelector('#entry-pass-title');
+ const entryPassDetails=document.querySelector('#entry-pass-details');
+ const entryPassQr=document.querySelector('#entry-pass-qr');
+ const entryPassState=document.querySelector('#entry-pass-state');
+ const entryVerificationModal=document.querySelector('#entry-verification-modal');
+ const entryVerificationTitle=document.querySelector('#entry-verification-title');
+ const entryVerificationState=document.querySelector('#entry-verification-state');
+ const entryVerificationGuest=document.querySelector('#entry-verification-guest');
+ const entryVerificationDetails=document.querySelector('#entry-verification-details');
+
+ function entryPassUrl(token){
+   const url=new URL(window.location.href);
+   url.hash='';
+   url.searchParams.set('entry_pass',token);
+   return url.href;
+ }
+
+ function openEntryPass(post,pass){
+   if(!pass?.entry_token)return;
+   entryPassTitle.textContent=pass.plan_title||post.title||'Your entry pass';
+   entryPassDetails.textContent=[post.location,formatDateTime(post.starts_at)].filter(Boolean).join(' · ');
+   entryPassState.textContent=pass.checked_in_at?'Already checked in':'Confirmed guest · one-time door check';
+   entryPassQr.replaceChildren();
+   if(window.QRCode){
+     const options={text:entryPassUrl(pass.entry_token),width:220,height:220,colorDark:'#172522',colorLight:'#f7f2e8'};
+     if(window.QRCode.CorrectLevel)options.correctLevel=window.QRCode.CorrectLevel.M;
+     new window.QRCode(entryPassQr,options);
+   }else{
+     entryPassQr.textContent='QR code is still loading. Please try again.';
+   }
+   entryPassModal.classList.add('open');
+ }
+
+ function renderEntryPassButtons(){
+   document.querySelectorAll('.post[data-plan-id]').forEach(card=>{
+     const post=posts.find(item=>item.id===card.dataset.planId);
+     const body=card.querySelector('.post-body');
+     if(!body)return;
+     body.querySelector('.entry-pass-button')?.remove();
+     if(!post?.entryPass||post.membershipStatus!=='confirmed')return;
+     const button=document.createElement('button');
+     button.type='button';
+     button.className='entry-pass-button';
+     button.textContent=post.entryPass.checked_in_at?'View entry pass · Checked in':'View QR entry pass';
+     button.onclick=()=>openEntryPass(post,post.entryPass);
+     body.append(button);
+   });
+ }
+
+ async function loadEntryPasses(){
+   if(!supabase||!currentUser)return;
+   const {data,error}=await supabase.rpc('get_my_entry_passes');
+   if(error)return;
+   const passes=new Map((data||[]).map(pass=>[pass.plan_id,pass]));
+   posts=posts.map(post=>({...post,entryPass:passes.get(post.id)||null}));
+   renderPosts();
+   renderEntryPassButtons();
+   if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='discover')renderDiscover();
+   applyAdminContent();
+   applyAdminStyles();
+ }
+
+ const originalLoadPlans=loadPlans;
+ loadPlans=async()=>{await originalLoadPlans();await loadEntryPasses()};
+ const originalToggleJoin=toggleJoin;
+ toggleJoin=async index=>{
+   const planId=posts[index]?.id;
+   await originalToggleJoin(index);
+   const post=posts.find(item=>item.id===planId);
+   if(post?.membershipStatus==='confirmed'&&post.entryPass)openEntryPass(post,post.entryPass);
+ };
+
+ entryPassModal.querySelector('#close-entry-pass').onclick=()=>entryPassModal.classList.remove('open');
+ entryPassModal.onclick=event=>{if(event.target===entryPassModal)entryPassModal.classList.remove('open')};
+ entryVerificationModal.querySelector('#close-entry-verification').onclick=()=>entryVerificationModal.classList.remove('open');
+ entryVerificationModal.onclick=event=>{if(event.target===entryVerificationModal)entryVerificationModal.classList.remove('open')};
+
+ function showEntryVerification(result){
+   const approved=result?.valid===true;
+   entryVerificationTitle.textContent=result?.plan_title||'Entry check';
+   entryVerificationState.className=`verification-state ${approved?'valid':'invalid'}`;
+   entryVerificationState.textContent=approved?'Entry verified':'Entry not approved';
+   entryVerificationGuest.textContent=result?.attendee_name||result?.reason||'This pass could not be verified.';
+   entryVerificationDetails.textContent=approved||result?.plan_id?[result.plan_title,result.location,formatDateTime(result.starts_at)].filter(Boolean).join(' · '):result?.reason||'';
+   entryVerificationModal.classList.add('open');
+ }
+
+ const entryTokenFromUrl=new URLSearchParams(window.location.search).get('entry_pass');
+ let entryVerificationHandled=false;
+ async function verifyIncomingEntryPass(){
+   if(!entryTokenFromUrl||entryVerificationHandled)return;
+   if(!currentUser){
+     showToast('Log in as the event host to verify this pass');
+     loginModal.classList.add('open');
+     return;
+   }
+   entryVerificationHandled=true;
+   const {data,error}=await supabase.rpc('verify_entry_pass',{p_entry_token:entryTokenFromUrl});
+   showEntryVerification(error?{valid:false,reason:error.message}:rpcRow(data));
+   const cleanUrl=new URL(window.location.href);
+   cleanUrl.searchParams.delete('entry_pass');
+   window.history.replaceState(window.history.state,'',cleanUrl.href);
+ }
+ if(supabase&&entryTokenFromUrl){
+   supabase.auth.onAuthStateChange(()=>verifyIncomingEntryPass());
+   setTimeout(verifyIncomingEntryPass,0);
+ }
+ if(supabase)supabase.auth.getSession().then(({data})=>{if(data.session?.user)loadEntryPasses()});
+ })();

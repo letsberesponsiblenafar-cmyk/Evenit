@@ -8,6 +8,7 @@
   const when=document.querySelector('#preview-when');
   const capacity=document.querySelector('#preview-capacity');
   const caption=document.querySelector('#preview-caption');
+  form.elements.pass_memo?.closest('label')?.remove();
 
   function formatDate(value){
     if(!value)return'Choose a date';
