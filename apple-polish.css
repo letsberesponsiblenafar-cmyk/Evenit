@@ -1119,6 +1119,64 @@ body:before{opacity:.06!important;background-size:32px 32px!important}
 .lived-add-btn:hover{transform:scale(1.05)}
 .lived-add-btn:active{opacity:0.85}
 
+/* ── Feed Sections ── */
+.feed-section{margin-bottom:28px}
+.feed-section-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.feed-section-header h3{font:700 15px var(--apple-font);letter-spacing:-0.02em;color:var(--apple-text);margin:0}
+.feed-section-dot{width:8px;height:8px;border-radius:50%;background:var(--apple-accent);flex-shrink:0}
+.feed-section-dot.aftermath{background:#34C759}
+
+/* ── Following Event Cards ── */
+.following-feed{display:grid;gap:14px}
+.following-card{
+  background:var(--apple-card);border:1px solid var(--apple-line);border-radius:20px;overflow:hidden;
+  box-shadow:var(--apple-shadow-sm);transition:transform 0.2s,box-shadow 0.2s;cursor:pointer;
+}
+.following-card:hover{box-shadow:var(--apple-shadow-md);transform:translateY(-2px)}
+.following-card:active{transform:scale(0.98)}
+.following-card-visual{position:relative;height:140px;overflow:hidden}
+.following-card-gradient{position:absolute;inset:0;opacity:0.9}
+.following-card-gradient[data-cat="creative"]{background:linear-gradient(135deg,#667eea,#764ba2)}
+.following-card-gradient[data-cat="food-drink"]{background:linear-gradient(135deg,#f093fb,#f5576c)}
+.following-card-gradient[data-cat="outdoors"]{background:linear-gradient(135deg,#4facfe,#00f2fe)}
+.following-card-gradient[data-cat="social"]{background:linear-gradient(135deg,#43e97b,#38f9d7)}
+.following-card-gradient[data-cat="music"]{background:linear-gradient(135deg,#fa709a,#fee140)}
+.following-card-gradient[data-cat="sports"]{background:linear-gradient(135deg,#a18cd1,#fbc2eb)}
+.following-card-gradient[data-cat="default"]{background:linear-gradient(135deg,#667eea,#764ba2)}
+.following-card-visual-inner{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding:16px;color:#fff}
+.following-card-badge{
+  display:inline-block;align-self:flex-start;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);
+  border-radius:999px;padding:4px 10px;font:600 10px var(--apple-font);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:8px;
+}
+.following-card-visual-inner h3{font:700 20px var(--apple-font);letter-spacing:-0.03em;margin:0 0 2px;line-height:1.1;text-shadow:0 1px 4px rgba(0,0,0,0.2)}
+.following-card-visual-inner p{font-size:12px;margin:0;opacity:0.9;text-shadow:0 1px 2px rgba(0,0,0,0.15)}
+.following-card-body{padding:14px 16px 16px}
+.following-card-author{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.following-card-author img{width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--apple-line)}
+.following-card-author strong{font:600 13px var(--apple-font);color:var(--apple-text);display:block}
+.following-card-author small{font-size:11px;color:var(--apple-muted)}
+.following-card-caption{font-size:13px;line-height:1.5;color:var(--apple-muted);margin:0 0 10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.following-card-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--apple-line);padding-top:10px}
+.following-card-count{font:500 12px var(--apple-font);color:var(--apple-muted)}
+.following-join-btn{
+  border:none;border-radius:999px;padding:8px 20px;font:600 13px var(--apple-font);
+  background:var(--apple-text);color:#fff;cursor:pointer;transition:all 0.2s;
+}
+.following-join-btn:hover{transform:scale(1.04);box-shadow:0 2px 10px rgba(0,0,0,0.15)}
+.following-join-btn:active{transform:scale(0.97)}
+.following-join-btn.joined{background:#34C759;color:#fff}
+
+/* ── Follow Button ── */
+.follow-btn{
+  border:1px solid var(--apple-line);border-radius:999px;padding:8px 22px;
+  font:600 13px var(--apple-font);color:var(--apple-text);background:var(--apple-card);
+  cursor:pointer;transition:all 0.2s;margin-top:10px;
+}
+.follow-btn:hover{border-color:var(--apple-accent);color:var(--apple-accent)}
+.follow-btn:active{transform:scale(0.96)}
+.follow-btn.following{background:var(--apple-accent);color:#fff;border-color:var(--apple-accent)}
+.follow-btn.following:hover{background:#FF3B30;border-color:#FF3B30}
+
 /* ── Smooth Page Transitions ── */
 .page-view,.feed-area,.stories{transition:opacity 0.15s ease}
 .back-to-home,.back-link{

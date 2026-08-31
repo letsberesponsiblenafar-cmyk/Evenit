@@ -180,115 +180,155 @@ function goHome(){
 }
 
 async function loadAftermathFeed(){
-  if(!supabase){ renderAftermathFeed([]); return; }
-  const {data,error}=await supabase.rpc('get_aftermath_feed',{p_limit:20});
-  if(error){ console.error(error); renderAftermathFeed([]); return; }
-  const withMedia = await Promise.all((data||[]).map(async post=>{
-    const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id', post.id);
-    return {...post, media: media||[]};
+  if(!supabase){ renderHomeFeed([],[]); return; }
+  const [aftRes,folRes]=await Promise.all([
+    supabase.rpc('get_aftermath_feed',{p_limit:20}),
+    currentUser?supabase.rpc('get_following_events',{p_user_id:currentUser.id,p_limit:20}):Promise.resolve({data:[]})
+  ]);
+  const aftData=aftRes.data||[];
+  const folData=folRes.data||[];
+  const withMedia=await Promise.all(aftData.map(async post=>{
+    const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id',post.id);
+    return {...post,media:media||[]};
   }));
-  renderAftermathFeed(withMedia);
+  renderHomeFeed(withMedia,folData.map(p=>({...p})));
 }
-function renderAftermathFeed(items){
+function renderHomeFeed(aftermathItems,followingItems){
   if(!postsEl) return;
-  if(!items || !items.length){
-    postsEl.innerHTML=`<div class="aftermath-empty"><div class="aftermath-empty-icon">\u25CE</div><h3>No stories yet</h3><p>When events end, their stories appear here. Join an upcoming plan and get checked in to share yours.</p><button onclick="document.querySelector('[data-page=discover]')?.click()">Discover upcoming</button></div>`;
+  const hasAft=aftermathItems&&aftermathItems.length;
+  const hasFol=followingItems&&followingItems.length;
+  if(!hasAft&&!hasFol){
+    postsEl.innerHTML='<div class="aftermath-empty"><div class="aftermath-empty-icon">\u25CE</div><h3>Your feed is quiet</h3><p>Follow people to see their upcoming events here. When events end, their stories appear as aftermath posts.</p><button onclick="document.querySelector(\'[data-page=discover]\')?.click()">Discover people</button></div>';
     return;
   }
-  postsEl.innerHTML=items.map((post)=>{
-    const tags=(post.hashtags||[]).map(h=>`<span class="aftermath-tag">#${escapeHtml(h)}</span>`).join(' ');
+  let html='';
+  if(hasFol){
+    html+='<div class="feed-section"><div class="feed-section-header"><span class="feed-section-dot"></span><h3>From people you follow</h3></div><div class="following-feed">';
+    html+=followingItems.map(p=>{
+      const d=new Date(p.starts_at);
+      const now=new Date();
+      const isToday=d.toDateString()===now.toDateString();
+      const isTomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).toDateString()===d.toDateString();
+      let when;
+      if(isToday){const h=d.getHours();const m=d.getMinutes();when='Today \u00b7 '+(h%12||12)+':'+String(m).padStart(2,'0')+(h>=12?'PM':'AM');}
+      else if(isTomorrow){const h=d.getHours();const m=d.getMinutes();when='Tomorrow \u00b7 '+(h%12||12)+':'+String(m).padStart(2,'0')+(h>=12?'PM':'AM');}
+      else{when=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' \u00b7 '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
+      const cap=p.capacity?(p.confirmed_count||0)+'/'+p.capacity:(p.confirmed_count||0)+' joined';
+      const gradient=getCardGradient(p.category);
+      const joined=posts.find(pp=>pp.id===p.id)?.joined;
+      return '<article class="following-card" data-plan-id="'+escapeHtml(p.id)+'">'
+        +'<div class="following-card-visual" data-cat="'+gradient+'"><div class="following-card-gradient"></div>'
+        +'<div class="following-card-visual-inner"><span class="following-card-badge">'+escapeHtml(p.category||'Event')+'</span>'
+        +'<h3>'+escapeHtml(p.title)+'</h3><p>'+escapeHtml(p.location||'')+'</p></div></div>'
+        +'<div class="following-card-body"><div class="following-card-author">'
+        +'<img src="'+escapeHtml(p.author_avatar||'https://i.pravatar.cc/100?img=68')+'" alt="">'
+        +'<div><strong>'+escapeHtml(p.author_name||p.author_username||'Member')+'</strong><small>'+escapeHtml(when)+'</small></div></div>'
+        +(p.caption?'<p class="following-card-caption">'+escapeHtml(p.caption)+'</p>':'')
+        +'<div class="following-card-footer"><span class="following-card-count">'+cap+'</span>'
+        +'<button class="following-join-btn '+(joined?'joined':'')+'" data-following-join="'+escapeHtml(p.id)+'">'+(joined?'Joined \u2713':'Join')+'</button></div></div></article>';
+    }).join('');
+    html+='</div></div>';
+  }
+  if(hasAft){
+    html+='<div class="feed-section"><div class="feed-section-header"><span class="feed-section-dot aftermath"></span><h3>Aftermath</h3></div>';
+    html+=renderAftermathCards(aftermathItems);
+    html+='</div>';
+  }
+  postsEl.innerHTML=html;
+  wireFollowingJoinButtons();
+  wireAftermathActions();
+}
+function renderAftermathCards(items){
+  return items.map(post=>{
+    const tags=(post.hashtags||[]).map(h=>'<span class="aftermath-tag">#'+escapeHtml(h)+'</span>').join(' ');
     const mediaHtml=(post.media||[]).map(m=>{
-      if(m.file_type==='image') return `<div class="aftermath-media-item image"><img src="${escapeHtml(m.file_url)}" alt="Event photo" loading="lazy"></div>`;
-      if(m.file_type==='video') return `<div class="aftermath-media-item video"><video src="${escapeHtml(m.file_url)}" controls preload="none" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='60'%3E%3Crect fill='%231D1D1F' width='100' height='60'/%3E%3Ctext x='50' y='34' text-anchor='middle' fill='%23fff' font-size='14'%3E\u25B6%3C/text%3E%3C/svg%3E"></video></div>`;
-      if(m.file_type==='pdf') return `<a class="aftermath-media-item pdf" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">${escapeHtml(m.file_name||'PDF document')}</span></a>`;
-      return `<a class="aftermath-media-item link" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer">${escapeHtml(m.file_name||'Link')}</a>`;
+      if(m.file_type==='image') return '<div class="aftermath-media-item image"><img src="'+escapeHtml(m.file_url)+'" alt="Photo" loading="lazy"></div>';
+      if(m.file_type==='video') return '<div class="aftermath-media-item video"><video src="'+escapeHtml(m.file_url)+'" controls preload="none"></video></div>';
+      if(m.file_type==='pdf') return '<a class="aftermath-media-item pdf" href="'+escapeHtml(m.file_url)+'" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">'+escapeHtml(m.file_name||'PDF')+'</span></a>';
+      return '';
     }).join('');
     const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
-    const authorName=escapeHtml(post.full_name||post.username||'Evenit member');
-    const authorHandle=escapeHtml(post.username?'@'+post.username:'');
-    const avatarUrl=escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68');
-    const planTitle=escapeHtml(post.plan_title||'');
-    const planLocation=escapeHtml(post.plan_location||'');
-    const timeAgo=formatPostTime(post.created_at);
-    const likeCount=post.like_count||0;
-    const commentCount=post.comment_count||0;
-    const isLiked=post.liked;
-    return`<article class="aftermath-card" data-aftermath-id="${escapeHtml(post.id)}">
-      <div class="aftermath-header">
-        <img class="aftermath-avatar" src="${avatarUrl}" alt="${authorName}">
-        <div class="aftermath-author">
-          <div class="aftermath-name">${authorName}</div>
-          <div class="aftermath-handle">${authorHandle}</div>
-        </div>
-        <div class="aftermath-time">${timeAgo}</div>
-      </div>
-      <div class="aftermath-event-context">
-        <div class="aftermath-event-badge">LIVED</div>
-        <div class="aftermath-event-info">
-          <span class="aftermath-event-title">${planTitle}</span>
-          ${planLocation?`<span class="aftermath-event-loc">\uD83D\uDCCD ${planLocation}</span>`:''}
-        </div>
-      </div>
-      <div class="aftermath-body">${escapeHtml(post.body)}</div>
-      ${tags?`<div class="aftermath-tags">${tags}</div>`:''}
-      ${mediaHtml?`<div class="aftermath-media ${gridClass}">${mediaHtml}</div>`:''}
-      <div class="aftermath-stats">
-        ${likeCount?`<span>${likeCount} ${likeCount===1?'like':'likes'}</span>`:''}
-        ${commentCount?`<span>${commentCount} ${commentCount===1?'comment':'comments'}</span>`:''}
-      </div>
-      <div class="aftermath-actions">
-        <button class="aftermath-action ${isLiked?'liked':''}" data-aftermath-like="${escapeHtml(post.id)}">
-          <span class="action-icon">${isLiked?'\u2665':'\u2661'}</span>
-          <span class="action-label">${isLiked?'Liked':'Like'}</span>
-        </button>
-        <button class="aftermath-action" data-aftermath-comment="${escapeHtml(post.id)}">
-          <span class="action-icon">\uD83D\uDCAC</span>
-          <span class="action-label">Comment</span>
-        </button>
-        <button class="aftermath-action" data-aftermath-share="${escapeHtml(post.id)}">
-          <span class="action-icon">\u2197</span>
-          <span class="action-label">Share</span>
-        </button>
-        <button class="aftermath-action save" data-aftermath-save="${escapeHtml(post.id)}">
-          <span class="action-icon">\u25C7</span>
-        </button>
-      </div>
-    </article>`;
+    return '<article class="aftermath-card" data-aftermath-id="'+escapeHtml(post.id)+'">'
+      +'<div class="aftermath-header"><img class="aftermath-avatar" src="'+escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt="">'
+      +'<div class="aftermath-author"><div class="aftermath-name">'+escapeHtml(post.full_name||post.username||'Evenit member')+'</div>'
+      +'<div class="aftermath-handle">'+escapeHtml(post.username?'@'+post.username:'')+'</div></div>'
+      +'<div class="aftermath-time">'+formatPostTime(post.created_at)+'</div></div>'
+      +'<div class="aftermath-event-context"><div class="aftermath-event-badge">LIVED</div>'
+      +'<div class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'')+'</span>'
+      +(post.plan_location?'<span class="aftermath-event-loc">\uD83D\uDCCD '+escapeHtml(post.plan_location)+'</span>':'')
+      +'</div></div>'
+      +'<div class="aftermath-body">'+escapeHtml(post.body)+'</div>'
+      +(tags?'<div class="aftermath-tags">'+tags+'</div>':'')
+      +(mediaHtml?'<div class="aftermath-media '+gridClass+'">'+mediaHtml+'</div>':'')
+      +'<div class="aftermath-stats">'
+      +(post.like_count?'<span>'+post.like_count+' '+(post.like_count===1?'like':'likes')+'</span>':'')
+      +(post.comment_count?'<span>'+post.comment_count+' '+(post.comment_count===1?'comment':'comments')+'</span>':'')
+      +'</div>'
+      +'<div class="aftermath-actions">'
+      +'<button class="aftermath-action '+(post.liked?'liked':'')+'" data-aftermath-like="'+escapeHtml(post.id)+'"><span class="action-icon">'+(post.liked?'\u2665':'\u2661')+'</span><span class="action-label">'+(post.liked?'Liked':'Like')+'</span></button>'
+      +'<button class="aftermath-action" data-aftermath-comment="'+escapeHtml(post.id)+'"><span class="action-icon">\uD83D\uDCAC</span><span class="action-label">Comment</span></button>'
+      +'<button class="aftermath-action" data-aftermath-share="'+escapeHtml(post.id)+'"><span class="action-icon">\u2197</span><span class="action-label">Share</span></button>'
+      +'<button class="aftermath-action save" data-aftermath-save="'+escapeHtml(post.id)+'"><span class="action-icon">\u25C7</span></button>'
+      +'</div></article>';
   }).join('');
+}
+function wireFollowingJoinButtons(){
+  document.querySelectorAll('[data-following-join]').forEach(btn=>{
+    btn.onclick=async()=>{
+      if(!supabase||!currentUser){showToast('Log in to join');return;}
+      const planId=btn.dataset.followingJoin;
+      const post=posts.find(p=>p.id===planId);
+      if(!post){showToast('Event not found');return;}
+      const idx=posts.indexOf(post);
+      if(idx<0)return;
+      btn.disabled=true;btn.textContent='...';
+      await toggleJoin(idx);
+      const isJoined=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted';
+      btn.textContent=isJoined?'Joined \u2713':'Join';
+      btn.classList.toggle('joined',isJoined);
+      btn.disabled=false;
+    };
+  });
+}
+function wireAftermathActions(){
   document.querySelectorAll('[data-aftermath-like]').forEach(b=>b.onclick=async()=>{
-    const id=b.dataset.aftermathLike;
-    const liked=b.classList.contains('liked');
-    if(!supabase||!currentUser){ showToast('Log in to like'); return; }
-    if(liked){ await supabase.from('plan_aftermath_likes').delete().eq('post_id', id).eq('user_id', currentUser.id); } else { await supabase.from('plan_aftermath_likes').insert({post_id:id, user_id:currentUser.id}); }
+    const id=b.dataset.aftermathLike;const liked=b.classList.contains('liked');
+    if(!supabase||!currentUser){showToast('Log in to like');return;}
+    if(liked)await supabase.from('plan_aftermath_likes').delete().eq('post_id',id).eq('user_id',currentUser.id);
+    else await supabase.from('plan_aftermath_likes').insert({post_id:id,user_id:currentUser.id});
     loadAftermathFeed();
   });
   document.querySelectorAll('[data-aftermath-comment]').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.aftermathComment;
-    activeAftermathCommentId=id;
+    const id=b.dataset.aftermathComment;activeAftermathCommentId=id;
     document.querySelector('#comment-sheet')?.classList.add('open');
     document.querySelector('#comment-list').innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading comments...</div>';
-    supabase.from('plan_aftermath_comments').select('id,body,created_at,user_id').eq('post_id', id).order('created_at',{ascending:true}).then(async ({data})=>{
+    supabase.from('plan_aftermath_comments').select('id,body,created_at,user_id').eq('post_id',id).order('created_at',{ascending:true}).then(async({data})=>{
       const list=document.querySelector('#comment-list');
-      if(!data||!data.length){ list.innerHTML='<div style="padding:24px;text-align:center;color:#6E6E73">No comments yet. Be first to share your thoughts.</div>'; return; }
+      if(!data||!data.length){list.innerHTML='<div style="padding:24px;text-align:center;color:#6E6E73">No comments yet. Be first to share your thoughts.</div>';return;}
       const uids=[...new Set(data.map(c=>c.user_id))];
       const {data:profs}=await supabase.rpc('get_public_profiles',{p_user_ids:uids});
       const mp=new Map((profs||[]).map(p=>[p.id,p]));
-      list.innerHTML=data.map(c=>{
-        const p=mp.get(c.user_id)||{};
-        return `<div class="comment-item"><img src="${escapeHtml(p.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><div class="comment-header"><strong>${escapeHtml(p.full_name||p.username||'Member')}</strong><small>${formatPostTime(c.created_at)}</small></div><div class="comment-body">${escapeHtml(c.body)}</div></div></div>`;
-      }).join('');
+      list.innerHTML=data.map(c=>{const p=mp.get(c.user_id)||{};return '<div class="comment-item"><img src="'+escapeHtml(p.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><div class="comment-header"><strong>'+escapeHtml(p.full_name||p.username||'Member')+'</strong><small>'+formatPostTime(c.created_at)+'</small></div><div class="comment-body">'+escapeHtml(c.body)+'</div></div></div>';}).join('');
     });
   });
   document.querySelectorAll('[data-aftermath-share]').forEach(b=>b.onclick=()=>{
-    const url=`${location.origin}${location.pathname}#aftermath-${b.dataset.aftermathShare}`;
+    const url=location.origin+location.pathname+'#aftermath-'+b.dataset.aftermathShare;
     document.querySelector('#share-url').textContent=url;
     document.querySelector('#share-sheet')?.classList.add('open');
   });
   document.querySelectorAll('[data-aftermath-save]').forEach(b=>b.onclick=()=>{
-    b.classList.toggle('saved');
-    try{ navigator.vibrate?.(12);}catch{}
+    b.classList.toggle('saved');try{navigator.vibrate?.(12);}catch{}
     showToast(b.classList.contains('saved')?'Saved \u2713':'Unsaved');
   });
+}
+function renderAftermathFeed(items){
+  if(!postsEl) return;
+  if(!items||!items.length){
+    postsEl.innerHTML='<div class="aftermath-empty"><div class="aftermath-empty-icon">\u25CE</div><h3>No stories yet</h3><p>When events end, their stories appear here.</p><button onclick="document.querySelector(\'[data-page=discover]\'\x29?.click()">Discover upcoming</button></div>';
+    return;
+  }
+  postsEl.innerHTML='<div class="feed-section"><div class="feed-section-header"><span class="feed-section-dot aftermath"></span><h3>Aftermath</h3></div>'+renderAftermathCards(items)+'</div>';
+  wireAftermathActions();
 }
 let activeAftermathCommentId=null;
 async function toggleJoin(index){const post=posts[index];if(!supabase||!currentUser){showToast('Create a profile before joining this event');signupModal.classList.add('open');return}if(!post.id){post.joined=!post.joined;renderPosts();return}const result=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'?await supabase.rpc('leave_plan',{p_plan_id:post.id}):await supabase.rpc('join_plan',{p_plan_id:post.id});if(result.error){showToast(result.error.message);return}const row=rpcRow(result.data);if(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'){showToast(row?.promoted_user_id?'You left the event. A person from the waitlist was promoted.':'You left this event');}else if(row?.status==='confirmed'){showToast(row.confirmation_memo?`You’re confirmed. ${row.confirmation_memo}`:'You’re confirmed for this event ✦')}else{showToast(`You’re on the waitlist${row?.queue_position?` at #${row.queue_position}`:''}. Confirmed guests receive the entry pass.`)}await loadPlans()}
@@ -680,7 +720,39 @@ loadSiteSettings();
  function refreshPageCopy(){if(pageView.hidden)return;const page=document.querySelector('[data-page].active')?.dataset.page;const copy={discover:[adminContent.discover_eyebrow||'Find your people',adminContent.discover_title||'Discover plans worth joining.'],notifications:[adminContent.notification_eyebrow||'Stay in the loop',adminContent.notification_title||'Notifications'],messages:[adminContent.messages_eyebrow||'Keep the plan moving',adminContent.messages_title||'Messages'],settings:[adminContent.settings_eyebrow||'Make it yours',adminContent.settings_title||'Settings']};const values=copy[page];if(values){const heading=pageView.querySelector('.page-header h2');const eyebrow=pageView.querySelector('.page-header .overline');if(heading)heading.textContent=values[1];if(eyebrow)eyebrow.textContent=values[0]}if(page==='profile'){const eyebrow=pageView.querySelector('.profile-intro .overline');const emptyTitle=pageView.querySelector('.profile-empty h3');const emptyDescription=pageView.querySelector('.profile-empty>p');const create=pageView.querySelector('#profile-post');const edit=pageView.querySelector('.edit-profile');if(eyebrow&&adminContent.profile_eyebrow)eyebrow.textContent=adminContent.profile_eyebrow;if(emptyTitle&&adminContent.profile_empty_title)emptyTitle.textContent=adminContent.profile_empty_title;if(emptyDescription&&adminContent.profile_empty_description)emptyDescription.textContent=adminContent.profile_empty_description;if(create&&adminContent.create_event_button)create.firstChild.nodeValue=`${adminContent.create_event_button} `;if(edit&&adminContent.edit_profile_button)edit.textContent=adminContent.edit_profile_button}}
  function showInsightsShell(){pushNav('profile');homeElements.forEach(element=>element.hidden=true);pageView.hidden=false}
  async function renderInsights(planId){const post=posts.find(item=>item.id===planId);if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return}activeInsightsPlanId=planId;showInsightsShell();pageView.innerHTML='<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back</button><p class="overline">Event insights</p><h2>Loading your numbers...</h2></div>';const {data,error}=await supabase.rpc('get_plan_insights',{p_plan_id:planId});if(error){pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back</button><p class="overline">Event insights</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(error.message)}</p></div>`;return}const info=typeof data==='string'?JSON.parse(data):data;const plan=info?.plan||post;const metrics=info?.metrics||{};const attendees=Array.isArray(info?.attendees)?info.attendees:[];const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);const attended=attendees.filter(item=>item.attended);const waitlisted=attendees.filter(item=>item.status==='waitlisted');const attendeeCard=item=>{const distance=item.distance_miles!==null&&item.distance_miles!==undefined?`${item.distance_miles} mi away`:item.neighborhood?(item.nearby?'Nearby \u00b7 same neighborhood':`Based in ${escapeHtml(item.neighborhood)}`):'Distance not shared';const state=item.attended?'Attended \u2713':item.status==='confirmed'?'Confirmed':'Waitlist #'+(item.queue_position||'');const cardClass=item.attended?'is-attended':item.status==='waitlisted'?'is-waitlisted':'';return`<button class="attendee-card ${cardClass}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')} \u00b7 ${distance}</small></span><b>${state}</b></button>`};const hostedCount=attended.length;const confirmedCount=confirmed.length+attended.length;pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back to your feed</button><div class="insights-header"><div><p class="overline">Event insights</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} \u00b7 ${formatDateTime(plan.starts_at||post.starts_at)}</p></div></div><div class="insights-metrics"><div class="insights-metric"><strong>${confirmedCount}</strong><span>Confirmed</span></div><div class="insights-metric"><strong>${hostedCount}</strong><span>Attended</span></div><div class="insights-metric"><strong>${waitlisted.length}</strong><span>Waitlisted</span></div><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reach</span></div></div><div class="insights-actions"><button class="scan-button" id="open-scan">Scan entry pass <span>\u2197</span></button><span class="insights-help">Guest shows QR \u00b7 host scans once to mark Attended</span></div><div class="insights-section"><h3>Attended (${attended.length})</h3>${attended.length?attended.map(attendeeCard).join(''):'<div class="insights-empty">No one checked in yet. Scan a guest QR to mark them as attended.</div>'}</div><div class="insights-section"><h3>Confirmed (${confirmed.length})</h3>${confirmed.length?confirmed.map(attendeeCard).join(''):'<div class="insights-empty">No pending confirmed guests.</div>'}</div><div class="insights-section"><h3>Waitlisted (${waitlisted.length})</h3>${waitlisted.length?waitlisted.map(attendeeCard).join(''):'<div class="insights-empty">No one on waitlist.</div>'}</div></div>`;document.querySelector('#open-scan').onclick=()=>openScanModal(planId);document.querySelector('#back-from-insights').onclick=()=>goBack();}
-async function renderPublicProfile(profileId){if(!supabase||!profileId)return;pushNav('profile');showInsightsShell();pageView.innerHTML='<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><p class="overline">Public profile</p><h2>Loading profile...</h2></div>';const {data,error}=await supabase.rpc('get_public_profile',{p_user_id:profileId});if(error||!data||!data.id){pageView.innerHTML=`<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><p class="overline">Public profile</p><h2>Profile unavailable</h2><p>${escapeHtml(error?.message||'This profile could not be loaded.')}</p></div>`;return}const profile=data;pageView.innerHTML=`<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><div class="public-profile-cover" style="${profile.banner_url?`background-image:url('${escapeHtml(profile.banner_url)}')`:''}"></div><div class="public-profile-intro"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt="${escapeHtml(profile.full_name||profile.username)}"><div><p class="overline">Public profile</p><h2>${escapeHtml(profile.full_name||profile.username||'Evenit member')}</h2><p>@${escapeHtml(profile.username||'member')}</p></div></div><div class="public-profile-meta"><span>${profile.plans_posted||0}<small>plans posted</small></span><span>${profile.joined_count||0}<small>events joined</small></span><span>${escapeHtml(profile.neighborhood||'Location private')}<small>neighborhood</small></span></div>${profile.college?`<p class="profile-detail"><strong>College</strong>${escapeHtml(profile.college)}</p>`:''}</div>`;document.querySelector('#back-from-profile').onclick=()=>goBack()}
+async function renderPublicProfile(profileId){
+  if(!supabase||!profileId)return;
+  pushNav('profile');
+  showInsightsShell();
+  pageView.innerHTML='<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><p class="overline">Public profile</p><h2>Loading profile...</h2></div>';
+  const {data,error}=await supabase.rpc('get_public_profile',{p_user_id:profileId});
+  if(error||!data||!data.id){pageView.innerHTML='<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><p class="overline">Public profile</p><h2>Profile unavailable</h2><p>'+escapeHtml(error?.message||'This profile could not be loaded.')+'</p></div>';return}
+  const profile=data;
+  const isSelf=currentUser?.id===profile.id;
+  pageView.innerHTML='<div class="public-profile-page"><button class="back-link" id="back-from-profile">← Back</button><div class="public-profile-cover" style="'+(profile.banner_url?"background-image:url('"+escapeHtml(profile.banner_url)+"')":'')+'"></div><div class="public-profile-intro"><img src="'+escapeHtml(profile.avatar_url||'https://i.pravatar.cc/160?img=68')+'" alt="'+escapeHtml(profile.full_name||profile.username)+'"><div><p class="overline">Public profile</p><h2>'+escapeHtml(profile.full_name||profile.username||'Evenit member')+'</h2><p>@'+escapeHtml(profile.username||'member')+'</p></div></div><div class="public-profile-meta"><span>'+(profile.plans_posted||0)+'<small>plans posted</small></span><span>'+(profile.joined_count||0)+'<small>events joined</small></span><span>'+escapeHtml(profile.neighborhood||'Location private')+'<small>neighborhood</small></span></div>'+(profile.college?'<p class="profile-detail"><strong>College</strong>'+escapeHtml(profile.college)+'</p>':'')+'</div>';
+  document.querySelector('#back-from-profile').onclick=()=>goBack();
+  if(!isSelf&&currentUser){
+    const intro=document.querySelector('.public-profile-intro');
+    if(intro){
+      const btn=document.createElement('button');
+      btn.className='follow-btn';
+      btn.dataset.followId=profile.id;
+      btn.textContent='Loading...';
+      intro.appendChild(btn);
+      supabase.rpc('get_follow_status',{p_follower_id:currentUser.id,p_following_ids:[profile.id]}).then(({data:fl})=>{
+        const isFollowing=fl&&fl.length>0;
+        btn.textContent=isFollowing?'Following':'Follow';
+        btn.classList.toggle('following',isFollowing);
+      });
+      btn.onclick=async()=>{
+        if(!currentUser){showToast('Log in to follow');return;}
+        const {data}=await supabase.rpc('toggle_follow',{p_following_id:profile.id});
+        if(data?.status==='followed'){btn.textContent='Following';btn.classList.add('following');showToast('Following ✓');}
+        else{btn.textContent='Follow';btn.classList.remove('following');showToast('Unfollowed');}
+      };
+    }
+  }
+}
  document.addEventListener('click',e=>{const insights=e.target.closest('[data-insights-id]');if(insights){e.preventDefault();e.stopImmediatePropagation();renderInsights(insights.dataset.insightsId);return}const profile=e.target.closest('[data-public-profile-id],[data-profile-id]');if(profile&&profile.dataset.profileId||profile&&profile.dataset.publicProfileId){e.preventDefault();e.stopImmediatePropagation();renderPublicProfile(profile.dataset.publicProfileId||profile.dataset.profileId)}},true);
  if(supabase)supabase.auth.onAuthStateChange(()=>loadPlans());
   document.querySelectorAll('[data-page]').forEach(link=>link.addEventListener('click',()=>setTimeout(()=>{applyAdminContent();applyAdminStyles();refreshPageCopy()},150)));
