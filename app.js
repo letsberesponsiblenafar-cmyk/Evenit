@@ -37,33 +37,68 @@ async function loadAftermathFeed(){
 function renderAftermathFeed(items){
   if(!postsEl) return;
   if(!items || !items.length){
-    postsEl.innerHTML=`<div style="background:#fff;border:1px solid #E8E8ED;border-radius:22px;padding:36px 24px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.04)"><div style="font-size:32px;margin-bottom:10px">\u25CE</div><div style="font:700 18px -apple-system,sans-serif;letter-spacing:-0.03em;color:#1D1D1F">No aftermath yet</div><div style="font-size:13px;color:#6E6E73;margin-top:6px;line-height:1.5">When events you lived end, their stories appear here.<br><span style="font-size:11px">Join an upcoming plan and get checked in to share yours.</span></div><button onclick="document.querySelector('[data-page=discover]')?.click()" style="margin-top:16px;background:#1D1D1F;color:#fff;border:none;border-radius:999px;padding:10px 18px;font:600 13px -apple-system,sans-serif;cursor:pointer">Discover upcoming</button></div>`;
+    postsEl.innerHTML=`<div class="aftermath-empty"><div class="aftermath-empty-icon">\u25CE</div><h3>No stories yet</h3><p>When events end, their stories appear here. Join an upcoming plan and get checked in to share yours.</p><button onclick="document.querySelector('[data-page=discover]')?.click()">Discover upcoming</button></div>`;
     return;
   }
   postsEl.innerHTML=items.map((post)=>{
-    const tags=(post.hashtags||[]).map(h=>`<a href="#" style="color:#5E5CE6;text-decoration:none">#${escapeHtml(h)}</a>`).join(' ');
+    const tags=(post.hashtags||[]).map(h=>`<span class="aftermath-tag">#${escapeHtml(h)}</span>`).join(' ');
     const mediaHtml=(post.media||[]).map(m=>{
-      if(m.file_type==='image') return `<img src="${escapeHtml(m.file_url)}" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid #E8E8ED">`;
-      if(m.file_type==='video') return `<video src="${escapeHtml(m.file_url)}" controls style="width:100%;max-height:320px;border-radius:12px;background:#000"></video>`;
-      if(m.file_type==='pdf') return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border:1px solid #E8E8ED;border-radius:12px;background:#F5F5F7;font:600 13px -apple-system,sans-serif;text-decoration:none;color:#1D1D1F">\uD83D\uDCC4 ${escapeHtml(m.file_name||'PDF')}</a>`;
-      return `<a href="${escapeHtml(m.file_url)}" target="_blank" style="font-size:12px;color:#5E5CE6">${escapeHtml(m.file_name||m.file_url)}</a>`;
+      if(m.file_type==='image') return `<div class="aftermath-media-item image"><img src="${escapeHtml(m.file_url)}" alt="Event photo" loading="lazy"></div>`;
+      if(m.file_type==='video') return `<div class="aftermath-media-item video"><video src="${escapeHtml(m.file_url)}" controls preload="none" poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='60'%3E%3Crect fill='%231D1D1F' width='100' height='60'/%3E%3Ctext x='50' y='34' text-anchor='middle' fill='%23fff' font-size='14'%3E\u25B6%3C/text%3E%3C/svg%3E"></video></div>`;
+      if(m.file_type==='pdf') return `<a class="aftermath-media-item pdf" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">${escapeHtml(m.file_name||'PDF document')}</span></a>`;
+      return `<a class="aftermath-media-item link" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer">${escapeHtml(m.file_name||'Link')}</a>`;
     }).join('');
-    return `<article class="post aftermath-post" data-aftermath-id="${escapeHtml(post.id)}" style="overflow:hidden">
-      <header class="post-head" style="padding:16px 20px 12px"><img src="${escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68')}" style="width:36px;height:36px;border-radius:50%"><div><strong style="font:600 14px -apple-system,sans-serif">${escapeHtml(post.full_name||post.username||'Evenit member')}</strong><small style="color:#6E6E73;font-size:11px">Lived \u00b7 ${escapeHtml(post.plan_title)} \u00b7 ${formatPostTime(post.created_at)}</small></div><span style="margin-left:auto;font:600 10px -apple-system,sans-serif;letter-spacing:0.06em;text-transform:uppercase;color:#5E5CE6;background:#F2F0FF;border-radius:999px;padding:6px 10px">Aftermath</span></header>
-      <div style="padding:0 20px 6px"><p style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6E6E73;margin:0 0 6px">AT ${escapeHtml(post.plan_location||'')}</p><h2 style="font:700 22px -apple-system,sans-serif;letter-spacing:-0.03em;margin:0 0 8px;line-height:1.1">${escapeHtml(post.plan_title)}</h2></div>
-      ${mediaHtml?`<div style="margin:0 16px;display:grid;gap:8px">${mediaHtml}</div>`:''}
-      <div class="post-body" style="padding:16px 20px 18px">
-        <div style="font-size:15px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(post.body)}</div>
-        ${tags?`<div style="margin-top:10px;font-size:13px">${tags}</div>`:''}
-        <div style="display:flex;gap:16px;margin-top:14px;color:#6E6E73;font-size:11px"><span>\u2665 ${post.like_count||0} likes</span><span>\uD83D\uDCAC ${post.comment_count||0} comments</span></div>
+    const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
+    const authorName=escapeHtml(post.full_name||post.username||'Evenit member');
+    const authorHandle=escapeHtml(post.username?'@'+post.username:'');
+    const avatarUrl=escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68');
+    const planTitle=escapeHtml(post.plan_title||'');
+    const planLocation=escapeHtml(post.plan_location||'');
+    const timeAgo=formatPostTime(post.created_at);
+    const likeCount=post.like_count||0;
+    const commentCount=post.comment_count||0;
+    const isLiked=post.liked;
+    return`<article class="aftermath-card" data-aftermath-id="${escapeHtml(post.id)}">
+      <div class="aftermath-header">
+        <img class="aftermath-avatar" src="${avatarUrl}" alt="${authorName}">
+        <div class="aftermath-author">
+          <div class="aftermath-name">${authorName}</div>
+          <div class="aftermath-handle">${authorHandle}</div>
+        </div>
+        <div class="aftermath-time">${timeAgo}</div>
       </div>
-      <div class="post-actions" style="margin:0 20px;padding:10px 0 14px;border-top:1px solid #E8E8ED;gap:8px">
-        <button class="action like ${post.liked?'liked':''}" data-aftermath-like="${escapeHtml(post.id)}" style="flex:1;background:${post.liked?'#F2F0FF':'#F5F5F7'};color:${post.liked?'#5E5CE6':'#6E6E73'};border-radius:999px;height:38px;font-size:14px">${post.liked?'\u2665 Liked':'\u2661 Like'}</button>
-        <button class="action comment" data-aftermath-comment="${escapeHtml(post.id)}" style="flex:1;background:#F5F5F7;border-radius:999px;height:38px">\uD83D\uDCAC Comment</button>
-        <button class="action share" data-aftermath-share="${escapeHtml(post.id)}" style="flex:1;background:#F5F5F7;border-radius:999px;height:38px">\u2197 Share</button>
-        <button class="action save" data-aftermath-save="${escapeHtml(post.id)}" style="width:44px;background:#F5F5F7;border-radius:50%">\u25C7</button>
+      <div class="aftermath-event-context">
+        <div class="aftermath-event-badge">LIVED</div>
+        <div class="aftermath-event-info">
+          <span class="aftermath-event-title">${planTitle}</span>
+          ${planLocation?`<span class="aftermath-event-loc">\uD83D\uDCCD ${planLocation}</span>`:''}
+        </div>
       </div>
-    </div>`;
+      <div class="aftermath-body">${escapeHtml(post.body)}</div>
+      ${tags?`<div class="aftermath-tags">${tags}</div>`:''}
+      ${mediaHtml?`<div class="aftermath-media ${gridClass}">${mediaHtml}</div>`:''}
+      <div class="aftermath-stats">
+        ${likeCount?`<span>${likeCount} ${likeCount===1?'like':'likes'}</span>`:''}
+        ${commentCount?`<span>${commentCount} ${commentCount===1?'comment':'comments'}</span>`:''}
+      </div>
+      <div class="aftermath-actions">
+        <button class="aftermath-action ${isLiked?'liked':''}" data-aftermath-like="${escapeHtml(post.id)}">
+          <span class="action-icon">${isLiked?'\u2665':'\u2661'}</span>
+          <span class="action-label">${isLiked?'Liked':'Like'}</span>
+        </button>
+        <button class="aftermath-action" data-aftermath-comment="${escapeHtml(post.id)}">
+          <span class="action-icon">\uD83D\uDCAC</span>
+          <span class="action-label">Comment</span>
+        </button>
+        <button class="aftermath-action" data-aftermath-share="${escapeHtml(post.id)}">
+          <span class="action-icon">\u2197</span>
+          <span class="action-label">Share</span>
+        </button>
+        <button class="aftermath-action save" data-aftermath-save="${escapeHtml(post.id)}">
+          <span class="action-icon">\u25C7</span>
+        </button>
+      </div>
+    </article>`;
   }).join('');
   document.querySelectorAll('[data-aftermath-like]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.aftermathLike;
@@ -79,13 +114,13 @@ function renderAftermathFeed(items){
     document.querySelector('#comment-list').innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading comments...</div>';
     supabase.from('plan_aftermath_comments').select('id,body,created_at,user_id').eq('post_id', id).order('created_at',{ascending:true}).then(async ({data})=>{
       const list=document.querySelector('#comment-list');
-      if(!data||!data.length){ list.innerHTML='<div style="padding:24px;text-align:center;color:#6E6E73">No comments yet. Be first.</div>'; return; }
+      if(!data||!data.length){ list.innerHTML='<div style="padding:24px;text-align:center;color:#6E6E73">No comments yet. Be first to share your thoughts.</div>'; return; }
       const uids=[...new Set(data.map(c=>c.user_id))];
       const {data:profs}=await supabase.rpc('get_public_profiles',{p_user_ids:uids});
       const mp=new Map((profs||[]).map(p=>[p.id,p]));
       list.innerHTML=data.map(c=>{
         const p=mp.get(c.user_id)||{};
-        return `<div style="display:flex;gap:10px;padding:10px 16px"><img src="${escapeHtml(p.avatar_url||'https://i.pravatar.cc/100?img=68')}" style="width:28px;height:28px;border-radius:50%"><div><strong style="font:600 12px -apple-system,sans-serif">${escapeHtml(p.full_name||p.username||'Member')}</strong> <small style="color:#6E6E73">${formatPostTime(c.created_at)}</small><div style="font-size:13px;margin-top:2px">${escapeHtml(c.body)}</div></div></div>`;
+        return `<div class="comment-item"><img src="${escapeHtml(p.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><div class="comment-header"><strong>${escapeHtml(p.full_name||p.username||'Member')}</strong><small>${formatPostTime(c.created_at)}</small></div><div class="comment-body">${escapeHtml(c.body)}</div></div></div>`;
       }).join('');
     });
   });
@@ -922,42 +957,65 @@ document.querySelector('#open-modal')?.addEventListener('click', ()=>{ modal.cla
 
 
 async function renderLivedOn(container){
-  if(!supabase||!currentUser){ container.innerHTML='<div class="lived-empty" style="padding:32px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">Log in to see your lived events.</div>'; return; }
-  container.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading lived...</div>';
+  if(!supabase||!currentUser){ container.innerHTML='<div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>No lived events yet</h3><p>Log in to see events you attended and stories you shared.</p></div>'; return; }
+  container.innerHTML='<div class="lived-loading">Loading your stories...</div>';
   const {data,error}=await supabase.rpc('get_lived_on',{p_user_id:currentUser.id});
-  if(error){ container.innerHTML=`<div style="padding:20px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
+  if(error){ container.innerHTML=`<div class="lived-empty"><div class="lived-empty-icon">\u26A0</div><h3>Could not load</h3><p>${escapeHtml(error.message)}</p></div>`; return; }
   if(!data||!data.length){
-    container.innerHTML=`<div class="lived-empty" style="padding:32px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font:700 16px -apple-system,sans-serif;letter-spacing:-0.03em;color:#1D1D1F">No lived events yet</div><div style="font-size:12px;margin-top:6px;line-height:1.5">Attend an event and get checked in by the host. After it ends, share your aftermath here.</div></div>`;
+    container.innerHTML=`<div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>No lived events yet</h3><p>Attend an event and get checked in by the host. After it ends, you can share your aftermath here.</p><button onclick="document.querySelector('[data-page=discover]')?.click()">Discover upcoming</button></div>`;
     return;
   }
-  container.innerHTML='<div class="lived-intro" style="padding:12px 0 14px;border-bottom:1px solid #E8E8ED;margin-bottom:14px"><p style="margin:0;color:#6E6E73;font:500 11px -apple-system,sans-serif;letter-spacing:0.06em;text-transform:uppercase">Lived On — aftermath</p><p style="margin:6px 0 0;color:#6E6E73;font-size:12px;line-height:1.5">Photos, videos, PDFs, notes and hashtags from events you lived.</p></div>' + (await Promise.all(data.map(async row=>{
-    const {data:aft}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id: row.plan_id});
-    const count=aft?aft.length:0;
-    const canPost=row.starts_at && new Date(row.starts_at) <= new Date();
-    return `<div class="lived-card" data-plan-id="${escapeHtml(row.plan_id)}" style="background:#fff;border:1px solid #E8E8ED;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,0.04)"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div style="font:600 11px -apple-system,sans-serif;letter-spacing:0.06em;text-transform:uppercase;color:#5E5CE6">Lived · ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div><div style="font:700 16px -apple-system,sans-serif;letter-spacing:-0.02em;margin:6px 0 4px">${escapeHtml(row.title)}</div><div style="font-size:12px;color:#6E6E73">${escapeHtml(row.location||'')} · ${count} aftermath ${count===1?'post':'posts'}</div></div><button class="publish-button" data-aftermath-plan="${escapeHtml(row.plan_id)}" style="border-radius:999px;padding:10px 16px;font-size:13px;flex:0 0 auto;${canPost?'':'opacity:0.5;pointer-events:none'}" title="${canPost?'Add aftermath':'Event not yet ended'}">＋ Aftermath</button></div><div class="aftermath-feed" id="aftermath-feed-${escapeHtml(row.plan_id)}" style="margin-top:12px;display:grid;gap:10px">${count? aft.map(post=>{
-      const mediaPlaceholder=''; // media will be fetched separately if needed
-      const tags=(post.hashtags||[]).map(h=>`<a href="#" style="color:#5E5CE6;text-decoration:none">#${escapeHtml(h)}</a>`).join(' ');
-      return `<div style="border:1px solid #E8E8ED;border-radius:14px;padding:12px 14px;background:#F5F5F7"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><img src="${escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68')}" style="width:28px;height:28px;border-radius:50%;object-fit:cover"><strong style="font:600 13px -apple-system,sans-serif">${escapeHtml(post.full_name||post.username||'Member')}</strong><small style="color:#6E6E73;font-size:11px">${formatPostTime(post.created_at)}</small></div><div style="font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(post.body)}</div><div style="font-size:12px;margin-top:6px">${tags}</div><div class="aftermath-media" data-post-id="${escapeHtml(post.id)}" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"></div></div>`;
-    }).join('') : '<div style="padding:14px;text-align:center;color:#6E6E73;font-size:12px;border:1px dashed #E8E8ED;border-radius:12px;background:#fff">No aftermath yet. Be first to share photos/videos/PDFs.</div>'}</div></div>`;
-  }))).join('');
-  // wire aftermath buttons
-  container.querySelectorAll('[data-aftermath-plan]').forEach(b=>b.onclick=()=>openAftermathComposer(b.dataset.aftermathPlan));
-  // load media for each post
+  let allPosts=[];
   for(const row of data){
     const {data:aft}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id: row.plan_id});
-    for(const post of (aft||[])){
-      const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id', post.id);
-      const el=container.querySelector(`[data-post-id="${post.id}"]`);
-      if(el && media && media.length){
-        el.innerHTML=media.map(m=>{
-          if(m.file_type==='image') return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(m.file_url)}" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:1px solid #E8E8ED"></a>`;
-          if(m.file_type==='video') return `<video src="${escapeHtml(m.file_url)}" controls style="width:160px;height:110px;border-radius:10px;background:#000"></video>`;
-          if(m.file_type==='pdf') return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #E8E8ED;border-radius:10px;background:#fff;font:600 12px -apple-system,sans-serif;text-decoration:none;color:#1D1D1F">📄 ${escapeHtml(m.file_name||'PDF')}</a>`;
-          return `<a href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer" style="font-size:12px;color:#5E5CE6">${escapeHtml(m.file_name||m.file_url)}</a>`;
-        }).join('');
+    if(aft){
+      for(const post of aft){
+        const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id', post.id);
+        allPosts.push({...post, media: media||[], plan_title:row.title, plan_location:row.location});
       }
     }
   }
+  allPosts.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(!allPosts.length){
+    container.innerHTML=`<div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>No stories shared yet</h3><p>You have attended ${data.length} event${data.length===1?'':'s'}. Tap an event below to share your aftermath.</p><div class="lived-events-list">${data.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">+ Share</button></div>`).join('')}</div></div>`;
+    container.querySelectorAll('[data-lived-add]').forEach(el=>{
+      el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
+    });
+    return;
+  }
+  const livedPostsHtml=allPosts.map(post=>{
+    const tags=(post.hashtags||[]).map(h=>`<span class="aftermath-tag">#${escapeHtml(h)}</span>`).join(' ');
+    const mediaHtml=(post.media||[]).map(m=>{
+      if(m.file_type==='image') return `<div class="aftermath-media-item image"><img src="${escapeHtml(m.file_url)}" alt="Event photo" loading="lazy"></div>`;
+      if(m.file_type==='video') return `<div class="aftermath-media-item video"><video src="${escapeHtml(m.file_url)}" controls preload="none"></video></div>`;
+      if(m.file_type==='pdf') return `<a class="aftermath-media-item pdf" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">${escapeHtml(m.file_name||'PDF document')}</span></a>`;
+      return '';
+    }).join('');
+    const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
+    return`<article class="aftermath-card lived-card" data-aftermath-id="${escapeHtml(post.id)}">
+      <div class="aftermath-event-context">
+        <div class="aftermath-event-badge lived">LIVED</div>
+        <div class="aftermath-event-info">
+          <span class="aftermath-event-title">${escapeHtml(post.plan_title||'')}</span>
+          ${post.plan_location?`<span class="aftermath-event-loc">\uD83D\uDCCD ${escapeHtml(post.plan_location)}</span>`:''}
+        </div>
+      </div>
+      <div class="aftermath-body">${escapeHtml(post.body)}</div>
+      ${tags?`<div class="aftermath-tags">${tags}</div>`:''}
+      ${mediaHtml?`<div class="aftermath-media ${gridClass}">${mediaHtml}</div>`:''}
+      <div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div>
+    </article>`;
+  }).join('');
+  const eventsWithData=data.filter(r=>r.aftermath_count>0);
+  const eventsWithout=data.filter(r=>!r.aftermath_count||r.aftermath_count===0);
+  let eventsHtml='';
+  if(eventsWithout.length){
+    eventsHtml=`<div class="lived-events-section"><div class="lived-events-label">Events waiting for your story</div>${eventsWithout.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">+ Share</button></div>`).join('')}</div>`;
+  }
+  container.innerHTML=`<div class="lived-header"><p class="lived-label">Your stories</p><p class="lived-sub">${allPosts.length} aftermath ${allPosts.length===1?'post':'posts'} from ${data.length} event${data.length===1?'':'s'}</p></div><div class="lived-feed">${livedPostsHtml}</div>${eventsHtml}`;
+  container.querySelectorAll('[data-lived-add]').forEach(el=>{
+    el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
+  });
 }
 let activeAftermathPlanId=null;
 function openAftermathComposer(planId){
