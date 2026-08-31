@@ -93,6 +93,9 @@ body:before{opacity:.06!important;background-size:32px 32px!important}
 .nav-item.active .nav-icon{color:#fff!important}
 .avatar-mini{background:var(--apple-accent)!important}
 .nav-item.active .avatar-mini{background:#fff!important;color:var(--apple-ink)!important}
+.msg-toggle{display:flex;background:var(--apple-line);padding:4px;border-radius:12px;margin:18px 0 24px;max-width:320px}
+.msg-tab{flex:1;border:0;background:0;padding:10px;font:600 13px -apple-system,sans-serif;color:var(--apple-muted);cursor:pointer;border-radius:9px;transition:all 0.2s}
+.msg-tab.active{background:#fff;color:var(--apple-ink);box-shadow:0 1px 4px rgba(0,0,0,0.06)}
 .post-button{
   background:var(--apple-ink)!important;
   color:#fff!important;
