@@ -1079,6 +1079,14 @@ body:before{opacity:.06!important;background-size:32px 32px!important}
 .comment-item .comment-header small{font-size:11px;color:var(--apple-muted)}
 .comment-item .comment-body{font-size:14px;line-height:1.5;color:var(--apple-text);margin-top:3px}
 
+/* ── Joined Page ── */
+.joined-page-loading{padding:40px;text-align:center;color:var(--apple-muted);font-size:13px}
+.joined-page-list{display:grid;gap:12px}
+.back-to-home{
+  display:inline-flex;align-items:center;gap:4px;border:none;background:none;color:var(--apple-accent);font:600 13px var(--apple-font);cursor:pointer;padding:0;margin-bottom:8px;transition:opacity 0.15s;
+}
+.back-to-home:hover{opacity:0.7}
+
 /* ── Profile Lived On ── */
 .lived-loading{padding:32px;text-align:center;color:var(--apple-muted);font-size:13px}
 .lived-empty{

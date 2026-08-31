@@ -64,18 +64,107 @@ function renderPulseBar(){
     const isOwned=p.user_id===currentUser.id;
     el.innerHTML=`<span class="pulse-time">${timeLabel}</span><strong>${escapeHtml(p.title)}</strong><small>${escapeHtml(p.location||'')}</small>`;
     el.onclick=()=>{
-      homeElements.forEach(e=>e.hidden=true);
-      pageView.hidden=false;
-      document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
-      pageView.innerHTML='';
-      renderPosts();
-      setTimeout(()=>{
-        const target=document.querySelector(`[data-plan-id="${p.id}"]`);
-        if(target) target.scrollIntoView({behavior:'smooth',block:'center'});
-      },100);
+      showJoinedPage();
     };
     bar.appendChild(el);
   });
+}
+
+function showJoinedPage(){
+  homeElements.forEach(e=>e.hidden=true);
+  pageView.hidden=false;
+  document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
+  pageView.innerHTML='<div class="joined-page-loading">Loading your plans...</div>';
+  const joined=posts.filter(p=>p.joined||p.user_id===currentUser?.id);
+  joined.sort((a,b)=>{
+    const da=a.starts_at?new Date(a.starts_at):new Date(0);
+    const db=b.starts_at?new Date(b.starts_at):new Date(0);
+    return da-db;
+  });
+  if(!joined.length){
+    pageView.innerHTML=`<div class="page-header"><button class="back-to-home" onclick="goHome()">\u2190 Back</button><p class="overline">Your plans</p><h2>Joined</h2></div><div class="joined-empty"><div class="joined-empty-icon">\u25CE</div><h3>No plans yet</h3><p>Join a plan or create one, and it will appear here with your entry pass.</p></div>`;
+    return;
+  }
+  const cardsHtml=joined.map(post=>{
+    const when=post.starts_at?formatDateTime(post.starts_at):'';
+    const isPast=post.starts_at&&new Date(post.starts_at)<new Date();
+    const isOwned=post.user_id===currentUser?.id;
+    const hasPass=post.entryPass&&post.membershipStatus==='confirmed';
+    const attended=post.entryPass?.checked_in_at;
+    const statusBadge=attended?'<span class="joined-badge attended">Attended</span>':post.membershipStatus==='confirmed'?'<span class="joined-badge confirmed">Confirmed</span>':post.membershipStatus==='waitlisted'?'<span class="joined-badge waitlisted">Waitlisted</span>':isOwned?'<span class="joined-badge owned">Host</span>':'';
+    return`<div class="joined-card" data-joined-id="${escapeHtml(post.id||'')}">
+      <div class="joined-card-top" data-joined-detail="${escapeHtml(post.id||'')}">
+        <div class="joined-card-info">
+          <div class="joined-card-title">${escapeHtml(post.title)}</div>
+          <div class="joined-card-meta">
+            <span class="joined-card-loc">\uD83D\uDCCD ${escapeHtml(post.location||'')}</span>
+            ${when?`<span class="joined-card-when">${escapeHtml(when)}</span>`:''}
+          </div>
+          <div class="joined-card-footer">
+            ${statusBadge}
+            <span class="joined-card-count">${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</span>
+          </div>
+        </div>
+        <div class="joined-card-arrow">\u2192</div>
+      </div>
+      <div class="joined-card-actions">
+        ${hasPass?`<button class="joined-action-btn pass-btn" data-joined-pass="${escapeHtml(post.id||'')}">View Your Pass</button>`:''}
+        ${isOwned&&!isPast?`<button class="joined-action-btn insights-btn" data-insights-id="${escapeHtml(post.id||'')}">Insights \u2197</button>`:''}
+        ${!isPast&&post.membershipStatus!=='attended'&&!isOwned?`<button class="joined-action-btn leave-btn" data-joined-leave="${escapeHtml(post.id||'')}">Leave Event</button>`:''}
+      </div>
+    </div>`}).join('');
+  pageView.innerHTML=`<div class="page-header"><button class="back-to-home" onclick="goHome()">\u2190 Back</button><p class="overline">Your plans</p><h2>Joined</h2><p style="font-size:13px;color:#6E6E73;margin:4px 0 0">${joined.length} plan${joined.length===1?'':'s'}</p></div><div class="joined-page-list">${cardsHtml}</div>`;
+  pageView.querySelectorAll('[data-joined-detail]').forEach(el=>{
+    el.style.cursor='pointer';
+    el.onclick=()=>{
+      const pid=el.dataset.joinedDetail;
+      const post=posts.find(p=>p.id===pid);
+      if(!post) return;
+      homeElements.forEach(e=>e.hidden=true);
+      pageView.hidden=false;
+      pageView.innerHTML='';
+      renderPosts();
+      setTimeout(()=>{
+        const target=document.querySelector(`[data-plan-id="${pid}"]`);
+        if(target) target.scrollIntoView({behavior:'smooth',block:'center'});
+      },100);
+    };
+  });
+  pageView.querySelectorAll('[data-joined-pass]').forEach(btn=>{
+    btn.onclick=()=>{
+      const post=posts.find(p=>p.id===btn.dataset.joinedPass);
+      if(post?.entryPass) openEntryPass(post,post.entryPass);
+      else showToast('Pass not available yet');
+    };
+  });
+  pageView.querySelectorAll('[data-joined-leave]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const pid=btn.dataset.joinedLeave;
+      const post=posts.find(p=>p.id===pid);
+      if(!post) return;
+      const idx=posts.indexOf(post);
+      if(idx<0) return;
+      btn.disabled=true;
+      btn.textContent='Leaving...';
+      await toggleJoin(idx);
+      showJoinedPage();
+    };
+  });
+  pageView.querySelectorAll('[data-insights-id]').forEach(btn=>{
+    btn.onclick=()=>{
+      const pid=btn.dataset.insightsId;
+      const post=posts.find(p=>p.id===pid);
+      if(!post) return;
+      renderInsights(pid);
+    };
+  });
+}
+
+function goHome(){
+  pageView.hidden=true;
+  homeElements.forEach(e=>e.hidden=false);
+  document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
+  document.querySelector('[data-page="home"]')?.classList.add('active');
 }
 
 async function loadAftermathFeed(){
@@ -297,7 +386,7 @@ const pageTemplates={
   groups:`<div class="page-header"><p class="overline">Private circles</p><h2>Groups</h2><p style="color:#6E6E73;font-size:13px;line-height:1.5;margin:8px 0 18px">Telegram-like, private, only members see messages. Create up to 150.</p><button class="publish-button" id="open-group-create" style="width:auto;border-radius:999px">＋ Create group</button></div><div id="groups-list" class="groups-list" style="margin-top:18px"></div>`,
   settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2></div><div class="settings-list"><button>Account details <span>→</span></button><button>Notification preferences <span>→</span></button><button>Privacy and safety <span>→</span></button><button>Help center <span>→</span></button></div>`,
 };
-  function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your upneXt story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile</button>':''}</div><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Joined</button><button>Saved</button><button>Lived On</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));applyAdminContent();applyAdminStyles()}
+  function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your upneXt story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile</button>':''}</div><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Saved</button><button>Lived On</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));applyAdminContent();applyAdminStyles()}
   function renderDiscover(){
   pageView.innerHTML=`<div class="page-header"><p class="overline">Find your people</p><h2>Discover<br><em>swipe to choose.</em></h2><p style="color:#6E6E73;font-size:13px;line-height:1.5;margin:8px 0 0">Right = interested \u00b7 Left = pass \u00b7 Upcoming events only</p></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div>`;
   loadSwipeDeck();
@@ -538,76 +627,9 @@ async function doSwipe(interested){
 function setPage(page){homeElements.forEach(element=>element.hidden=page!=='home');pageView.hidden=page==='home';document.querySelectorAll('[data-page]').forEach(link=>link.classList.toggle('active',link.dataset.page===page));if(page==='home'){ loadAftermathFeed(); } else {if(page==='profile')renderProfile();else if(page==='discover')renderDiscover();else if(page==='notifications')renderNotifications();else if(page==='groups')renderGroups();else if(page==='messages'){pageView.innerHTML=pageTemplates.messages; loadGroupMessagesPreview();}else pageView.innerHTML=pageTemplates[page]||pageTemplates.settings}window.scrollTo({top:0,behavior:'smooth'})}
   function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();
 if(key.includes('lived')){ renderLivedOn(content); return; }
-const items=key.includes('joined')?posts.filter(post=>post.joined):key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);
-if(!items.length){content.innerHTML=`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');return}
-if(key.includes('joined')){
-  content.innerHTML=items.map(post=>{
-    const hasPass=post.entryPass&&post.membershipStatus==='confirmed';
-    const attended=post.entryPass?.checked_in_at;
-    const when=post.starts_at?formatDateTime(post.starts_at):'';
-    const isPast=post.starts_at&&new Date(post.starts_at)<new Date();
-    const statusBadge=attended?'<span class="joined-badge attended">Attended</span>':post.membershipStatus==='confirmed'?'<span class="joined-badge confirmed">Confirmed</span>':post.membershipStatus==='waitlisted'?'<span class="joined-badge waitlisted">Waitlisted</span>':'';
-    return`<div class="joined-card" data-joined-id="${escapeHtml(post.id||'')}">
-      <div class="joined-card-top" data-joined-detail="${escapeHtml(post.id||'')}">
-        <div class="joined-card-info">
-          <div class="joined-card-title">${escapeHtml(post.title)}</div>
-          <div class="joined-card-meta">
-            <span class="joined-card-loc">\uD83D\uDCCD ${escapeHtml(post.location)}</span>
-            ${when?`<span class="joined-card-when">${escapeHtml(when)}</span>`:''}
-          </div>
-          <div class="joined-card-footer">
-            ${statusBadge}
-            <span class="joined-card-count">${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined</span>
-          </div>
-        </div>
-        <div class="joined-card-arrow">\u2192</div>
-      </div>
-      <div class="joined-card-actions">
-        ${hasPass?`<button class="joined-action-btn pass-btn" data-joined-pass="${escapeHtml(post.id||'')}">View Your Pass</button>`:''}
-        ${!isPast&&post.membershipStatus!=='attended'?`<button class="joined-action-btn leave-btn" data-joined-leave="${escapeHtml(post.id||'')}">Leave Event</button>`:''}
-      </div>
-    </div>`}).join('');
-  content.querySelectorAll('[data-joined-detail]').forEach(el=>{
-    el.onclick=()=>{
-      const pid=el.dataset.joinedDetail;
-      const post=posts.find(p=>p.id===pid);
-      if(!post) return;
-      const idx=posts.indexOf(post);
-      if(idx>=0){
-        homeElements.forEach(e=>e.hidden=true);
-        pageView.hidden=false;
-        document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
-        pageView.innerHTML='';
-        renderPosts();
-        const targetPost=document.querySelector(`[data-plan-id="${pid}"]`);
-        if(targetPost) targetPost.scrollIntoView({behavior:'smooth',block:'center'});
-      }
-    };
-    el.style.cursor='pointer';
-  });
-  content.querySelectorAll('[data-joined-pass]').forEach(btn=>{
-    btn.onclick=()=>{
-      const post=posts.find(p=>p.id===btn.dataset.joinedPass);
-      if(post?.entryPass) openEntryPass(post,post.entryPass);
-      else showToast('Pass not available yet');
-    };
-  });
-  content.querySelectorAll('[data-joined-leave]').forEach(btn=>{
-    btn.onclick=async()=>{
-      const pid=btn.dataset.joinedLeave;
-      const post=posts.find(p=>p.id===pid);
-      if(!post) return;
-      const idx=posts.indexOf(post);
-      if(idx<0) return;
-      btn.disabled=true;
-      btn.textContent='Leaving...';
-      await toggleJoin(idx);
-      renderProfileTab(tab);
-    };
-  });
-  return;
-}
-content.innerHTML=items.map(post=>{const owner=post.user_id===currentUser?.id;const attendedBadge=post.entryPass?.checked_in_at?' · Attended ✓':'';return`<button class="profile-event ${post.entryPass?.checked_in_at?'is-attended':''}" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>✦</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined${attendedBadge}</small></div>${owner?'<b>Insights ↗</b>':''}</button>`}).join('');
+const items=key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);
+if(!items.length){content.innerHTML=`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>' :''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');return}
+content.innerHTML=items.map(post=>{const owner=post.user_id===currentUser?.id;const attendedBadge=post.entryPass?.checked_in_at?' \u00b7 Attended \u2713':'';return`<button class="profile-event ${post.entryPass?.checked_in_at?'is-attended':''}" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>\u2726</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} \u00b7 ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined${attendedBadge}</small></div>${owner?'<b>Insights \u2197</b>':''}</button>`}).join('');
 const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');
 }
 document.querySelectorAll('[data-page]').forEach(link=>link.onclick=e=>{e.preventDefault();setPage(link.dataset.page)});
@@ -1103,7 +1125,7 @@ async function submitAftermath(e){
   }
   status.textContent='Posted ✓';
   showToast('Aftermath shared');
-  setTimeout(()=>{ document.querySelector('#aftermath-modal')?.classList.remove('open'); const tab=document.querySelector('.profile-tabs button:nth-child(4)'); if(tab) renderProfileTab(tab); }, 600);
+  setTimeout(()=>{ document.querySelector('#aftermath-modal')?.classList.remove('open'); const tab=document.querySelector('.profile-tabs button:nth-child(3)'); if(tab) renderProfileTab(tab); }, 600);
 }
 document.querySelector('#close-aftermath-modal')?.addEventListener('click', ()=>document.querySelector('#aftermath-modal')?.classList.remove('open'));
 document.querySelector('#aftermath-modal')?.addEventListener('click', e=>{ if(e.target.id==='aftermath-modal') e.currentTarget.classList.remove('open'); });
