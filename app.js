@@ -22,7 +22,42 @@ async function trackPostImpressions(){if(!window.IntersectionObserver)return;con
  function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.textContent='EV'}}
 const mapUrl=place=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
 async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile()}
-async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile()}
+async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile();renderPulseBar()}
+
+function renderPulseBar(){
+  const bar=document.querySelector('#pulse-bar');
+  if(!bar) return;
+  const addBtn=bar.querySelector('.add-story');
+  if(!currentUser){
+    if(addBtn) addBtn.style.display='';
+    return;
+  }
+  const joined=posts.filter(p=>p.joined&&p.starts_at&&new Date(p.starts_at)>new Date());
+  joined.sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+  bar.querySelectorAll('.pulse-card').forEach(el=>el.remove());
+  if(!joined.length){
+    if(addBtn) addBtn.style.display='';
+    return;
+  }
+  joined.slice(0,8).forEach(p=>{
+    const when=formatWhen(p.starts_at);
+    const el=document.createElement('button');
+    el.className='story pulse-card';
+    el.innerHTML=`<span class="pulse-time">${escapeHtml(when)}</span><strong>${escapeHtml(p.title)}</strong><small>${escapeHtml(p.location||'')}</small>`;
+    el.onclick=()=>{
+      homeElements.forEach(e=>e.hidden=true);
+      pageView.hidden=false;
+      document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
+      pageView.innerHTML='';
+      renderPosts();
+      setTimeout(()=>{
+        const target=document.querySelector(`[data-plan-id="${p.id}"]`);
+        if(target) target.scrollIntoView({behavior:'smooth',block:'center'});
+      },100);
+    };
+    bar.appendChild(el);
+  });
+}
 
 async function loadAftermathFeed(){
   if(!supabase){ renderAftermathFeed([]); return; }
