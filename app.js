@@ -27,23 +27,42 @@ async function loadPlans(){if(!supabase)return;const {data,error}=await supabase
 function renderPulseBar(){
   const bar=document.querySelector('#pulse-bar');
   if(!bar) return;
-  const addBtn=bar.querySelector('.add-story');
-  if(!currentUser){
-    if(addBtn) addBtn.style.display='';
-    return;
-  }
-  const joined=posts.filter(p=>p.joined&&p.starts_at&&new Date(p.starts_at)>new Date());
-  joined.sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
   bar.querySelectorAll('.pulse-card').forEach(el=>el.remove());
-  if(!joined.length){
-    if(addBtn) addBtn.style.display='';
-    return;
-  }
-  joined.slice(0,8).forEach(p=>{
-    const when=formatWhen(p.starts_at);
+  if(!currentUser) return;
+  const now=new Date();
+  const upcoming=posts.filter(p=>p.starts_at&&new Date(p.starts_at)>now&&(p.joined||p.user_id===currentUser.id));
+  upcoming.sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+  if(!upcoming.length) return;
+  const days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  upcoming.slice(0,10).forEach((p,i)=>{
+    const d=new Date(p.starts_at);
+    const isToday=d.toDateString()===now.toDateString();
+    const isTomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).toDateString()===d.toDateString();
+    let timeLabel;
+    if(isToday){
+      const h=d.getHours();const m=d.getMinutes();
+      const ampm=h>=12?'PM':'AM';
+      const h12=h%12||12;
+      timeLabel=`Today \u00b7 ${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+    } else if(isTomorrow){
+      const h=d.getHours();const m=d.getMinutes();
+      const ampm=h>=12?'PM':'AM';
+      const h12=h%12||12;
+      timeLabel=`Tomorrow \u00b7 ${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+    } else {
+      const diff=Math.ceil((d-now)/86400000);
+      if(diff<=6){
+        timeLabel=`${days[d.getDay()]} \u00b7 ${months[d.getMonth()]} ${d.getDate()}`;
+      } else {
+        timeLabel=`${months[d.getMonth()]} ${d.getDate()}`;
+      }
+    }
     const el=document.createElement('button');
     el.className='story pulse-card';
-    el.innerHTML=`<span class="pulse-time">${escapeHtml(when)}</span><strong>${escapeHtml(p.title)}</strong><small>${escapeHtml(p.location||'')}</small>`;
+    el.setAttribute('data-pulse-idx',i);
+    const isOwned=p.user_id===currentUser.id;
+    el.innerHTML=`<span class="pulse-time">${timeLabel}</span><strong>${escapeHtml(p.title)}</strong><small>${escapeHtml(p.location||'')}</small>`;
     el.onclick=()=>{
       homeElements.forEach(e=>e.hidden=true);
       pageView.hidden=false;
