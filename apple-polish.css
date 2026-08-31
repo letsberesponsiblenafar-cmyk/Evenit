@@ -1119,6 +1119,27 @@ body:before{opacity:.06!important;background-size:32px 32px!important}
 .lived-add-btn:hover{transform:scale(1.05)}
 .lived-add-btn:active{opacity:0.85}
 
+/* ── Smooth Page Transitions ── */
+.page-view,.feed-area,.stories{transition:opacity 0.15s ease}
+.back-to-home,.back-link{
+  display:inline-flex;align-items:center;gap:4px;border:none;background:none;
+  color:var(--apple-accent);font:600 13px var(--apple-font);cursor:pointer;
+  padding:6px 0;margin-bottom:4px;border-radius:8px;transition:background 0.15s,opacity 0.15s;
+}
+.back-to-home:hover,.back-link:hover{background:rgba(94,92,230,0.06)}
+.back-to-home:active,.back-link:active{opacity:0.6}
+.back-link{margin-bottom:12px}
+
+/* ── Group Page ── */
+.group-item{cursor:pointer;transition:transform 0.15s,box-shadow 0.15s}
+.group-item:hover{transform:translateY(-1px);box-shadow:var(--apple-shadow-sm)}
+.group-item:active{transform:scale(0.98)}
+
+/* ── Insight Cards ── */
+.attendee-card{transition:transform 0.15s,box-shadow 0.15s}
+.attendee-card:hover{transform:translateY(-1px);box-shadow:var(--apple-shadow-sm)}
+.attendee-card:active{transform:scale(0.98)}
+
 /* Mobile */
 @media(max-width:700px){
   .modal-backdrop{padding:0!important}
