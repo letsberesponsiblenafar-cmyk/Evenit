@@ -145,3 +145,23 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.32;ba
 @media(prefers-reduced-motion:reduce){
   .post,.story,.nav-item,.post-button{transition:none!important}
 }
+
+.aftermath-post .post-visual{display:flex;align-items:center;justify-content:center;position:relative}
+.aftermath-hero{width:100%;height:100%;object-fit:cover;display:block;border-radius:2px}
+.aftermath-media-strip{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.aftermath-media-strip img{width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--board-line)}
+.aftermath-media-strip video{width:128px;height:88px;border-radius:8px;background:#000}
+.aftermath-file{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--board-line);border-radius:999px;color:var(--board-ink);text-decoration:none;font:500 10px 'DM Mono',monospace}
+.discover-swipe-wrap{margin-top:28px;border:1px solid var(--board-line);border-radius:3px;background:var(--board-paper);padding:18px;box-shadow:8px 8px 0 var(--board-lime)}
+.discover-swipe-card{border:1px solid var(--board-ink);border-radius:3px;background:#fff;padding:20px;touch-action:pan-y;cursor:grab;user-select:none}
+.discover-swipe-card h3{font:700 30px 'Space Grotesk',sans-serif;letter-spacing:-1px;line-height:1.05;margin:10px 0 8px}
+.discover-swipe-card p{margin:0;color:var(--board-muted);font-size:13px;line-height:1.45}
+.discover-swipe-card .discover-swipe-caption{margin-top:12px;color:var(--board-ink)}
+.discover-swipe-meta{margin-top:14px;font:500 10px 'DM Mono',monospace;color:var(--board-accent);letter-spacing:.7px;text-transform:uppercase}
+.discover-swipe-actions{display:flex;gap:10px;margin-top:12px}
+.swipe-btn{flex:1;border:1px solid var(--board-ink);background:transparent;color:var(--board-ink);border-radius:2px;padding:11px 12px;font:600 12px 'Space Grotesk',sans-serif}
+.swipe-right{background:var(--board-ink);color:var(--board-paper)}
+.discover-swipe-count{margin-top:10px;color:var(--board-muted);font-size:11px}
+.discover-swipe-empty{text-align:center;padding:26px}
+.discover-swipe-empty h3{margin:0;font:600 19px 'Space Grotesk',sans-serif}
+.discover-swipe-empty p{margin:8px 0 16px;color:var(--board-muted);font-size:12px}
