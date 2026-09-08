@@ -1,0 +1,8 @@
+{
+  "appId": "app.evenit.mobile",
+  "appName": "Evenit",
+  "webDir": "mobile/www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

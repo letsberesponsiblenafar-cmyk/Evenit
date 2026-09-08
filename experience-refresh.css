@@ -56,3 +56,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 @keyframes evenit-enter{from{opacity:.01;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.page-view{animation:none!important}}
+
+/* Android build access sits with Saved; the dock follows the requested order. */
+.android-download{display:flex;align-items:center;gap:7px;margin:7px 5px 0;padding:9px 10px;border-radius:10px;background:var(--evenit-violet-soft);color:var(--evenit-violet);font:700 11px -apple-system,BlinkMacSystemFont,sans-serif;text-decoration:none}.android-download:hover{background:#e6e1ff}
+@media(max-width:650px){.mobile-dock button{margin-top:0!important}.mobile-dock button small{font-size:9px!important;line-height:1!important}.mobile-dock button span{line-height:.8!important}}

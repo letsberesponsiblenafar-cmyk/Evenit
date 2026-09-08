@@ -767,6 +767,7 @@ async function openDirectConversation(profile){
   document.querySelector('#back-from-direct-message').onclick=()=>setPage('messages');
   const thread=document.querySelector('#direct-thread');
   const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';thread.scrollTop=thread.scrollHeight;};
+  window.refreshEvenitDirectThread=loadThread;
   await loadThread();
   document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await loadThread();};
 }
@@ -1076,6 +1077,7 @@ async function loadGroups(){
   rail?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>{ setPage('groups'); setTimeout(()=>openGroup(b.dataset.openGroup), 300); });
 }
 async function openGroup(groupId){
+  window.evenitActiveGroupId=groupId;
   if(!supabase) return;
   const {data:group}=await supabase.from('groups').select('id,name,description').eq('id',groupId).maybeSingle();
   const {data:messages}=await supabase.from('group_messages').select('id,body,created_at,user_id').eq('group_id',groupId).order('created_at',{ascending:true}).limit(50);
@@ -1240,5 +1242,35 @@ document.querySelector('#aftermath-files')?.addEventListener('change', e=>{
 });
 
 
-if(supabase)supabase.auth.getSession().then(({data})=>{if(data.session?.user)loadEntryPasses()});
+let evenitLiveChannel=null;
+let evenitLiveRefreshTimer=null;
+function scheduleEvenitLiveRefresh(kind){
+  clearTimeout(evenitLiveRefreshTimer);
+  evenitLiveRefreshTimer=setTimeout(()=>{
+    const activePage=document.querySelector('[data-page].active')?.dataset.page;
+    if(kind==='plans'){loadPlans();if(activePage==='discover')renderDiscover();}
+    if(kind==='aftermath'&&pageView.hidden)loadAftermathFeed();
+    if(kind==='notifications'&&activePage==='notifications')renderNotifications();
+    if(kind==='messages'){
+      if(typeof window.refreshEvenitDirectThread==='function')window.refreshEvenitDirectThread();
+      else if(activePage==='messages')showToast('You have a new message');
+    }
+    if(kind==='groups'&&window.evenitActiveGroupId)openGroup(window.evenitActiveGroupId);
+  },260);
+}
+function subscribeToEvenitLiveUpdates(){
+  if(!supabase||!currentUser)return;
+  if(evenitLiveChannel)supabase.removeChannel(evenitLiveChannel);
+  evenitLiveChannel=supabase.channel('evenit-live-'+currentUser.id)
+    .on('postgres_changes',{event:'*',schema:'public',table:'plans'},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_aftermath_posts'},()=>scheduleEvenitLiveRefresh('aftermath'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('notifications'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'group_messages'},()=>scheduleEvenitLiveRefresh('groups'))
+    .subscribe();
+}
+if(supabase){
+  supabase.auth.getSession().then(({data})=>{if(data.session?.user){loadEntryPasses();subscribeToEvenitLiveUpdates();}});
+  supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;if(currentUser)subscribeToEvenitLiveUpdates();else if(evenitLiveChannel){supabase.removeChannel(evenitLiveChannel);evenitLiveChannel=null;}});
+}
  })();

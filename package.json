@@ -1,5 +1,15 @@
 {
+  "scripts": {
+    "mobile:copy": "node scripts/build-mobile.mjs",
+    "mobile:sync": "npm run mobile:copy && npx cap sync android",
+    "android:apk": "npm run mobile:sync && cd android && gradlew.bat assembleDebug"
+  },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "supabase": "^2.115.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1"
   }
 }
