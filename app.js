@@ -1273,4 +1273,38 @@ if(supabase){
   supabase.auth.getSession().then(({data})=>{if(data.session?.user){loadEntryPasses();subscribeToEvenitLiveUpdates();}});
   supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;if(currentUser)subscribeToEvenitLiveUpdates();else if(evenitLiveChannel){supabase.removeChannel(evenitLiveChannel);evenitLiveChannel=null;}});
 }
+let evenitRefreshing=false;
+let evenitRefreshInterval=null;
+function setEvenitConnectionState(online,message){
+  const control=document.querySelector('#connection-refresh');
+  if(!control)return;
+  control.classList.toggle('offline',online===false);
+  control.classList.toggle('syncing',evenitRefreshing);
+  control.title=message|| (online===false?'You are offline. Reconnect to refresh.':'Live updates are connected');
+  control.querySelector('span').textContent=online===false?'Offline':evenitRefreshing?'Syncing':'Live';
+}
+async function refreshEvenitLiveData({quiet=false}={}){
+  if(!supabase){setEvenitConnectionState(false,'Database connection is unavailable');return;}
+  if(!navigator.onLine){setEvenitConnectionState(false,'You are offline. Reconnect to refresh.');if(!quiet)showToast('You are offline — changes will refresh when you reconnect');return;}
+  if(evenitRefreshing)return;
+  evenitRefreshing=true;setEvenitConnectionState(true,'Refreshing your live data…');
+  try{
+    await Promise.all([loadPlans(),loadAftermathFeed()]);
+    const activePage=document.querySelector('[data-page].active')?.dataset.page;
+    if(activePage==='discover')await loadFollowingEvents();
+    if(activePage==='notifications')await renderNotifications();
+    if(activePage==='messages')await loadGroups();
+    setEvenitConnectionState(true,'Live updates are connected');
+    if(!quiet)showToast('Everything is up to date');
+  }catch(error){setEvenitConnectionState(false,'Could not reach the live database');if(!quiet)showToast('Could not refresh. Check your connection and try again.');}
+  finally{evenitRefreshing=false;setEvenitConnectionState(navigator.onLine);}
+}
+document.querySelector('#connection-refresh')?.addEventListener('click',()=>refreshEvenitLiveData());
+window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
+window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
+window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
+window.addEventListener('evenit:native-back',()=>{if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
+setEvenitConnectionState(navigator.onLine);
+evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},45000);
  })();
