@@ -3,6 +3,11 @@
   "appName": "Evenit",
   "webDir": "mobile/www",
   "server": {
-    "androidScheme": "https"
+    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "letsberesponsiblenafar-cmyk.github.io",
+      "sidnyjkllimorfkbwrcz.supabase.co"
+    ]
   }
 }
