@@ -35,15 +35,17 @@ async function trackPostImpressions(){if(!window.IntersectionObserver)return;con
  function updateMobileHeader(page){const activePage=page||document.querySelector('[data-page].active')?.dataset.page||'home';const mobileLogin=document.querySelector('#open-login-mobile');const mobileMenu=document.querySelector('#mobile-menu');if(mobileLogin)mobileLogin.hidden=Boolean(currentUser);if(mobileMenu)mobileMenu.hidden=activePage!=='profile';}
  function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.textContent='EV'}updateMobileHeader()}
 const mapUrl=place=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
-async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile();renderPulseBar()}
+async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:!!plan.requires_college_verification,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile();renderPulseBar()}
 
 function renderPulseBar(){
   const bar=document.querySelector('#pulse-bar');
   if(!bar) return;
   bar.querySelectorAll('.pulse-card').forEach(el=>el.remove());
   if(!currentUser) return;
+  const intro=bar.querySelector('.pulse-intro');
+  if(intro){intro.tabIndex=0;intro.setAttribute('role','button');intro.setAttribute('aria-label','Open your event timeline');intro.onclick=showJoinedPage;intro.onkeydown=event=>{if(event.key==='Enter'||event.key===' ')showJoinedPage()};}
   const now=new Date();
-  const upcoming=posts.filter(p=>p.starts_at&&new Date(p.starts_at)>now&&(p.joined||p.user_id===currentUser.id));
+  const upcoming=getAgendaPlans().filter(p=>p.starts_at&&new Date(p.starts_at)>now);
   upcoming.sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
   if(!upcoming.length) return;
   const days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
@@ -74,13 +76,21 @@ function renderPulseBar(){
     const el=document.createElement('button');
     el.className='story pulse-card';
     el.setAttribute('data-pulse-idx',i);
-    const isOwned=p.user_id===currentUser.id;
     el.innerHTML=`<span class="pulse-time">${timeLabel}</span><strong>${escapeHtml(p.title)}</strong><small>${escapeHtml(p.location||'')}</small>`;
-    el.onclick=()=>{
-      showJoinedPage();
-    };
+    el.onclick=()=>showAgendaDetail(p.id);
     bar.appendChild(el);
   });
+}
+
+function getAgendaPlans(){
+  return posts.filter(post=>post.user_id===currentUser?.id||post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted');
+}
+
+function agendaStatus(post){
+  if(post.entryPass?.checked_in_at)return {label:'Attended',className:'attended'};
+  if(post.user_id===currentUser?.id)return {label:'Hosting',className:'owned'};
+  if(post.membershipStatus==='confirmed')return {label:'Confirmed',className:'confirmed'};
+  return {label:'Waitlisted',className:'waitlisted'};
 }
 
 function showJoinedPage(){
@@ -89,7 +99,7 @@ function showJoinedPage(){
   pageView.hidden=false;
   document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
   pageView.innerHTML='<div class="joined-page-loading">Loading your plans...</div>';
-  const joined=posts.filter(p=>p.joined||p.user_id===currentUser?.id);
+  const joined=getAgendaPlans();
   joined.sort((a,b)=>{
     const da=a.starts_at?new Date(a.starts_at):new Date(0);
     const db=b.starts_at?new Date(b.starts_at):new Date(0);
@@ -127,21 +137,14 @@ function showJoinedPage(){
         ${!isPast&&post.membershipStatus!=='attended'&&!isOwned?`<button class="joined-action-btn leave-btn" data-joined-leave="${escapeHtml(post.id||'')}">Leave Event</button>`:''}
       </div>
     </div>`}).join('');
-  pageView.innerHTML=`<div class="page-header"><button class="back-to-home" onclick="goBack()">\u2190 Back</button><p class="overline">Your plans</p><h2>Joined</h2><p style="font-size:13px;color:#6E6E73;margin:4px 0 0">${joined.length} plan${joined.length===1?'':'s'}</p></div><div class="joined-page-list">${cardsHtml}</div>`;
+  pageView.innerHTML=`<div class="page-header"><button class="back-to-home" onclick="goBack()">\u2190 Back</button><p class="overline">Your timeline</p><h2>Ideas in motion</h2><p class="agenda-subtitle">Hosted, confirmed, and waitlisted plans — ordered by date.</p></div><div class="joined-page-list">${cardsHtml}</div>`;
   pageView.querySelectorAll('[data-joined-detail]').forEach(el=>{
     el.style.cursor='pointer';
     el.onclick=()=>{
       const pid=el.dataset.joinedDetail;
       const post=posts.find(p=>p.id===pid);
       if(!post) return;
-      homeElements.forEach(e=>e.hidden=true);
-      pageView.hidden=false;
-      pageView.innerHTML='';
-      renderPosts();
-      setTimeout(()=>{
-        const target=document.querySelector(`[data-plan-id="${pid}"]`);
-        if(target) target.scrollIntoView({behavior:'smooth',block:'center'});
-      },100);
+      showAgendaDetail(pid);
     };
   });
   pageView.querySelectorAll('[data-joined-pass]').forEach(btn=>{
@@ -174,6 +177,28 @@ function showJoinedPage(){
   });
 }
 
+function showAgendaDetail(planId){
+  const post=posts.find(item=>item.id===planId);
+  if(!post)return;
+  pushNav('home');
+  homeElements.forEach(element=>element.hidden=true);
+  pageView.hidden=false;
+  document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
+  const status=agendaStatus(post);
+  const isOwner=post.user_id===currentUser?.id;
+  const isPast=post.starts_at&&new Date(post.starts_at)<new Date();
+  const attendance=post.capacity?`${post.joinedCount||0} of ${post.capacity} confirmed`:`${post.joinedCount||0} confirmed`;
+  const requirements=post.requiresCollegeVerification?'College and enrolment details are required for verification before entry.':'No additional identity details are required for this event.';
+  const passAction=post.entryPass&&post.membershipStatus==='confirmed'?`<button class="agenda-primary" data-agenda-pass="${escapeHtml(post.id)}">${post.entryPass.checked_in_at?'View checked-in pass':'View QR entry pass'}</button>`:'';
+  const hostAction=isOwner?`<button class="joined-action-btn insights-btn" data-insights-id="${escapeHtml(post.id)}">View host insights ↗</button>`:'';
+  const leaveAction=!isOwner&&!isPast?`<button class="joined-action-btn leave-btn" data-agenda-leave="${escapeHtml(post.id)}">Leave event</button>`:'';
+  const waitlistNote=post.membershipStatus==='waitlisted'?'<p class="agenda-note">You are on the waitlist. Your pass will appear here automatically if a place opens.</p>':'';
+  pageView.innerHTML=`<section class="agenda-detail"><button class="back-to-home" data-agenda-back>← Your timeline</button><div class="agenda-hero"><span class="joined-badge ${status.className}">${status.label}</span><p class="overline">${escapeHtml(post.category||'Community event')}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="agenda-detail-grid"><section class="agenda-panel"><h3>Event details</h3><dl><div><dt>When</dt><dd>${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</dd></div><div><dt>Where</dt><dd><a href="${mapUrl(post.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(post.location||'Location to be announced')} ↗</a></dd></div><div><dt>Attendance</dt><dd>${escapeHtml(attendance)}</dd></div></dl><p class="agenda-description">${escapeHtml(post.caption)}</p></section><section class="agenda-panel"><h3>Your entry</h3><p class="agenda-requirement"><strong>Verification</strong>${escapeHtml(requirements)}</p>${waitlistNote}${passAction}<div class="agenda-actions">${hostAction}${leaveAction}</div></section></div></section>`;
+  pageView.querySelector('[data-agenda-back]').onclick=showJoinedPage;
+  pageView.querySelector('[data-agenda-pass]')?.addEventListener('click',()=>openEntryPass(post,post.entryPass));
+  pageView.querySelector('[data-agenda-leave]')?.addEventListener('click',async event=>{event.currentTarget.disabled=true;event.currentTarget.textContent='Leaving…';const index=posts.indexOf(post);await toggleJoin(index);showJoinedPage();});
+  pageView.querySelector('[data-insights-id]')?.addEventListener('click',()=>renderInsights(post.id));
+}
 
 async function loadAftermathFeed(){
   if(!supabase){ renderHomeFeed([]); return; }
