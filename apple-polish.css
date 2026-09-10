@@ -954,6 +954,7 @@ body:before{opacity:.06!important;background-size:32px 32px!important}
   background:rgba(255,149,0,0.1);
   color:#FF9500;
 }
+.joined-badge.interested{background:rgba(94,92,230,.1);color:var(--apple-accent)}
 .joined-badge.owned{
   background:rgba(94,92,230,0.1);
   color:var(--apple-accent);

@@ -35,7 +35,7 @@ async function trackPostImpressions(){if(!window.IntersectionObserver)return;con
  function updateMobileHeader(page){const activePage=page||document.querySelector('[data-page].active')?.dataset.page||'home';const mobileLogin=document.querySelector('#open-login-mobile');const mobileMenu=document.querySelector('#mobile-menu');if(mobileLogin)mobileLogin.hidden=Boolean(currentUser);if(mobileMenu)mobileMenu.hidden=activePage!=='profile';}
  function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.textContent='EV'}updateMobileHeader()}
 const mapUrl=place=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
-async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:!!plan.requires_college_verification,isOwner:currentUser?.id===plan.user_id,saved:savedEventIds.has(plan.id)}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile();renderPulseBar()}
+async function loadPlans(){if(!supabase)return;const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult,swipeResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));const swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};const swipeInterest=swipes.get(plan.id);return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:!!plan.requires_college_verification,isOwner:currentUser?.id===plan.user_id,swipeInterest,interested:swipeInterest===true,saved:savedEventIds.has(plan.id)||swipeInterest===true}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile')renderProfile();renderPulseBar()}
 
 function renderPulseBar(){
   const bar=document.querySelector('#pulse-bar');
@@ -83,13 +83,14 @@ function renderPulseBar(){
 }
 
 function getAgendaPlans(){
-  return posts.filter(post=>post.user_id===currentUser?.id||post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted');
+  return posts.filter(post=>post.user_id===currentUser?.id||post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.interested);
 }
 
 function agendaStatus(post){
   if(post.entryPass?.checked_in_at)return {label:'Attended',className:'attended'};
   if(post.user_id===currentUser?.id)return {label:'Hosting',className:'owned'};
   if(post.membershipStatus==='confirmed')return {label:'Confirmed',className:'confirmed'};
+  if(post.interested)return {label:'Interested',className:'interested'};
   return {label:'Waitlisted',className:'waitlisted'};
 }
 
@@ -134,7 +135,7 @@ function showJoinedPage(){
       <div class="joined-card-actions">
         ${hasPass?`<button class="joined-action-btn pass-btn" data-joined-pass="${escapeHtml(post.id||'')}">View Your Pass</button>`:''}
         ${isOwned&&!isPast?`<button class="joined-action-btn insights-btn" data-insights-id="${escapeHtml(post.id||'')}">Insights \u2197</button>`:''}
-        ${!isPast&&post.membershipStatus!=='attended'&&!isOwned?`<button class="joined-action-btn leave-btn" data-joined-leave="${escapeHtml(post.id||'')}">Leave Event</button>`:''}
+        ${!isPast&&(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted')&&!isOwned?`<button class="joined-action-btn leave-btn" data-joined-leave="${escapeHtml(post.id||'')}">Leave Event</button>`:''}
       </div>
     </div>`}).join('');
   pageView.innerHTML=`<div class="page-header"><button class="back-to-home" onclick="goBack()">\u2190 Back</button><p class="overline">Your timeline</p><h2>Ideas in motion</h2><p class="agenda-subtitle">Hosted, confirmed, and waitlisted plans — ordered by date.</p></div><div class="joined-page-list">${cardsHtml}</div>`;
@@ -191,7 +192,7 @@ function showAgendaDetail(planId){
   const requirements=post.requiresCollegeVerification?'College and enrolment details are required for verification before entry.':'No additional identity details are required for this event.';
   const passAction=post.entryPass&&post.membershipStatus==='confirmed'?`<button class="agenda-primary" data-agenda-pass="${escapeHtml(post.id)}">${post.entryPass.checked_in_at?'View checked-in pass':'View QR entry pass'}</button>`:'';
   const hostAction=isOwner?`<button class="joined-action-btn insights-btn" data-insights-id="${escapeHtml(post.id)}">View host insights ↗</button>`:'';
-  const leaveAction=!isOwner&&!isPast?`<button class="joined-action-btn leave-btn" data-agenda-leave="${escapeHtml(post.id)}">Leave event</button>`:'';
+  const leaveAction=!isOwner&&!isPast&&(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted')?`<button class="joined-action-btn leave-btn" data-agenda-leave="${escapeHtml(post.id)}">Leave event</button>`:'';
   const waitlistNote=post.membershipStatus==='waitlisted'?'<p class="agenda-note">You are on the waitlist. Your pass will appear here automatically if a place opens.</p>':'';
   pageView.innerHTML=`<section class="agenda-detail"><button class="back-to-home" data-agenda-back>← Your timeline</button><div class="agenda-hero"><span class="joined-badge ${status.className}">${status.label}</span><p class="overline">${escapeHtml(post.category||'Community event')}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="agenda-detail-grid"><section class="agenda-panel"><h3>Event details</h3><dl><div><dt>When</dt><dd>${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</dd></div><div><dt>Where</dt><dd><a href="${mapUrl(post.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(post.location||'Location to be announced')} ↗</a></dd></div><div><dt>Attendance</dt><dd>${escapeHtml(attendance)}</dd></div></dl><p class="agenda-description">${escapeHtml(post.caption)}</p></section><section class="agenda-panel"><h3>Your entry</h3><p class="agenda-requirement"><strong>Verification</strong>${escapeHtml(requirements)}</p>${waitlistNote}${passAction}<div class="agenda-actions">${hostAction}${leaveAction}</div></section></div></section>`;
   pageView.querySelector('[data-agenda-back]').onclick=showJoinedPage;
@@ -230,7 +231,7 @@ function renderFollowingCards(followingItems){
       if(isToday){const h=d.getHours();const m=d.getMinutes();when='Today \u00b7 '+(h%12||12)+':'+String(m).padStart(2,'0')+(h>=12?'PM':'AM');}
       else if(isTomorrow){const h=d.getHours();const m=d.getMinutes();when='Tomorrow \u00b7 '+(h%12||12)+':'+String(m).padStart(2,'0')+(h>=12?'PM':'AM');}
       else{when=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' \u00b7 '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});}
-      const cap=p.capacity?(p.confirmed_count||0)+'/'+p.capacity:(p.confirmed_count||0)+' joined';
+      const cap=p.capacity?((p.confirmed_count??p.joinedCount??0)+'/'+p.capacity):((p.confirmed_count??p.joinedCount??0)+' joined');
       const gradient=getCardGradient(p.category);
       const joined=posts.find(pp=>pp.id===p.id)?.joined;
       return '<article class="following-card" data-plan-id="'+escapeHtml(p.id)+'">'
@@ -238,21 +239,54 @@ function renderFollowingCards(followingItems){
         +'<div class="following-card-visual-inner"><span class="following-card-badge">'+escapeHtml(p.category||'Event')+'</span>'
         +'<h3>'+escapeHtml(p.title)+'</h3><p>'+escapeHtml(p.location||'')+'</p></div></div>'
         +'<div class="following-card-body"><div class="following-card-author" data-public-profile-id="'+escapeHtml(p.user_id)+'">'
-        +'<img src="'+escapeHtml(p.author_avatar||'https://i.pravatar.cc/100?img=68')+'" alt="">'
-        +'<div><strong>'+escapeHtml(p.author_name||p.author_username||'Member')+'</strong><small>'+escapeHtml(when)+'</small></div></div>'
+        +'<img src="'+escapeHtml(p.author_avatar||p.avatar||'https://i.pravatar.cc/100?img=68')+'" alt="">'
+        +'<div><strong>'+escapeHtml(p.author_name||p.author_username||p.name||p.user||'Member')+'</strong><small>'+escapeHtml(when)+'</small></div></div>'
         +(p.caption?'<p class="following-card-caption">'+escapeHtml(p.caption)+'</p>':'')
-        +'<div class="following-card-footer"><span class="following-card-count">'+cap+'</span>'
+        +'<div class="following-card-footer"><span class="following-card-count">'+cap+'</span><span class="discover-match">'+escapeHtml(p.recommendationLabel||'Upcoming')+'</span>'
         +'<button class="following-join-btn '+(joined?'joined':'')+'" data-following-join="'+escapeHtml(p.id)+'">'+(joined?'Joined \u2713':'Join')+'</button></div></div></article>';
   }).join('');
 }
 async function loadFollowingEvents(){
   const list=document.querySelector('#following-events');
   if(!list) return;
-  if(!supabase||!currentUser){list.innerHTML='<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>Follow people to see their plans</h3><p>Events from people you follow will collect here.</p></div>';return;}
-  const {data,error}=await supabase.rpc('get_following_events',{p_user_id:currentUser.id,p_limit:20});
-  if(error){list.innerHTML='<div class="aftermath-empty"><h3>Events are unavailable</h3><p>Please try again in a moment.</p></div>';return;}
-  list.innerHTML=data?.length?renderFollowingCards(data):'<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>No upcoming plans</h3><p>Follow people you’d like to make plans with, then come back here.</p></div>';
+  if(!currentUser){list.innerHTML='<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>Log in to personalize Discover</h3><p>We will rank upcoming events around your interests once your profile is ready.</p></div>';return;}
+  const ranked=await getRankedDiscoverPlans();
+  list.innerHTML=ranked.length?renderFollowingCards(ranked):'<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>No upcoming plans right now</h3><p>Come back soon — new events will appear here.</p></div>';
   wireFollowingJoinButtons();
+}
+
+async function getDiscoverPreferences(){
+  if(!supabase||!currentUser)return {interests:[],categorySignals:new Map()};
+  const [{data:profile},{data:swipes}]=await Promise.all([
+    supabase.from('profiles').select('interests').eq('id',currentUser.id).maybeSingle(),
+    supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id)
+  ]);
+  const byId=new Map(posts.map(post=>[post.id,post]));
+  const categorySignals=new Map();
+  (swipes||[]).forEach(swipe=>{const category=byId.get(swipe.plan_id)?.category;if(!category)return;const key=category.toLowerCase();categorySignals.set(key,(categorySignals.get(key)||0)+(swipe.interested?1:-1));});
+  return {interests:(profile?.interests||[]).map(value=>String(value).toLowerCase()),categorySignals};
+}
+
+function discoverNoise(id){
+  const key=`${id}-${new Date().toISOString().slice(0,10)}`;
+  let hash=0;for(let index=0;index<key.length;index++)hash=(hash*31+key.charCodeAt(index))|0;
+  return Math.abs(hash%100)/100;
+}
+
+async function getRankedDiscoverPlans({forSwipe=false}={}){
+  const preferences=await getDiscoverPreferences();
+  const now=Date.now();
+  return posts.filter(post=>{
+    if(!post.starts_at||new Date(post.starts_at).getTime()<=now||post.user_id===currentUser?.id)return false;
+    if(post.swipeInterest===false)return false;
+    return !forSwipe||post.swipeInterest===undefined;
+  }).map(post=>{
+    const category=String(post.category||'').toLowerCase();
+    const interestMatch=preferences.interests.includes(category);
+    const signal=preferences.categorySignals.get(category)||0;
+    const score=(interestMatch?100:0)+signal*18+discoverNoise(post.id)*12-(new Date(post.starts_at).getTime()-now)/86400000*.04;
+    return {...post,recommendationLabel:interestMatch?'Interest match':signal>0?'Based on your swipes':'Explore something new',discoverScore:score};
+  }).sort((a,b)=>b.discoverScore-a.discoverScore);
 }
 function renderAftermathCards(items){
   return items.map(post=>{
@@ -455,10 +489,13 @@ const pageTemplates={
 };
   function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"><span class="profile-cover-glow"></span></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile <span>↗</span></button>':''}</div><p class="profile-about-own" hidden></p><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Lived On</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));loadProfileDetails();applyAdminContent();applyAdminStyles()}
   function renderDiscover(){
-  pageView.innerHTML=`<div class="page-header discover-header"><div><p class="overline">From your circle</p><h2>Following<br><em>events.</em></h2><p>Plans shared by people you follow. Tap a person to see their story.</p></div><button class="discover-swipe-launch" id="open-swipe-discover" type="button"><span>✦</span> Swipe events</button></div><div class="discover-welcome"><span class="discover-welcome-icon">⌕</span><div><strong>Your people, plus a little surprise.</strong><small>Browse familiar plans—or swipe through something new.</small></div></div><div id="following-events" class="following-feed"></div><section id="discover-swipe-section" class="discover-swipe-section" hidden><div class="discover-swipe-heading"><div><p class="overline">Something new</p><h3>Swipe to choose.</h3></div><button type="button" id="close-swipe-discover">Close</button></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div></section>`;
+  pageView.innerHTML=`<div class="page-header discover-header"><div><p class="overline">Made for you</p><h2>Discover<br><em>events.</em></h2><p>Interest matches first, then a little room for something unexpected.</p></div><button class="discover-swipe-launch" id="open-swipe-discover" type="button"><span>✦</span> Swipe events</button></div><div class="discover-welcome"><span class="discover-welcome-icon">⌕</span><div><strong>All upcoming events, ranked for you.</strong><small>Swipe separately to tune what Evenit recommends next.</small></div></div><div id="following-events" class="following-feed"></div><div class="discover-swipe-overlay" id="discover-swipe-overlay" hidden><section id="discover-swipe-section" class="discover-swipe-section" role="dialog" aria-modal="true" aria-label="Swipe events"><div class="discover-swipe-heading"><div><p class="overline">Something new</p><h3>Swipe to choose.</h3><small>Right means interested. Left means show me less like this.</small></div><button type="button" id="close-swipe-discover" aria-label="Close swipe events">×</button></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div></section></div>`;
   loadFollowingEvents();
-  document.querySelector('#open-swipe-discover').onclick=()=>{const section=document.querySelector('#discover-swipe-section');section.hidden=false;section.scrollIntoView({behavior:'smooth',block:'start'});loadSwipeDeck();};
-  document.querySelector('#close-swipe-discover').onclick=()=>document.querySelector('#discover-swipe-section').hidden=true;
+  const swipeOverlay=document.querySelector('#discover-swipe-overlay');
+  const closeSwipe=()=>{swipeOverlay.classList.remove('open');setTimeout(()=>swipeOverlay.hidden=true,180);};
+  document.querySelector('#open-swipe-discover').onclick=()=>{swipeOverlay.hidden=false;requestAnimationFrame(()=>swipeOverlay.classList.add('open'));loadSwipeDeck();};
+  document.querySelector('#close-swipe-discover').onclick=closeSwipe;
+  swipeOverlay.onclick=event=>{if(event.target===swipeOverlay)closeSwipe();};
   applyAdminContent();applyAdminStyles();
 }
 let swipeStack=[];
@@ -490,16 +527,8 @@ async function loadSwipeDeck(){
   const deck=document.querySelector('#swipe-deck');
   if(!deck) return;
   deck.innerHTML='<div class="swipe-empty"><div class="swipe-empty-icon">\u25CE</div><p>Loading upcoming...</p></div>';
-  let data=[];
-  if(supabase){
-    const {data:d,error}=await supabase.rpc('get_upcoming_for_discover',{p_limit:20});
-    if(!error && d) data=d;
-  }
-  if(!data.length){
-    const now=Date.now();
-    data=posts.filter(p=>p.starts_at && new Date(p.starts_at).getTime() > now).slice(0,10);
-  }
-  swipeStack=data;
+  const data=await getRankedDiscoverPlans({forSwipe:true});
+  swipeStack=data.slice(0,20);
   swipeIndex=0;
   swipeHistory=[];
   renderSwipeCard();
@@ -683,12 +712,21 @@ async function doSwipe(interested){
       savedEventIds.add(p.id);
       localStorage.setItem('evenit-saved-events', JSON.stringify([...savedEventIds]));
       try{ await supabase.from('plan_swipes').upsert({user_id: currentUser?.id, plan_id: p.id, interested: true, updated_at: new Date().toISOString()}); }catch{}
+      const matching=posts.find(post=>post.id===p.id);if(matching){matching.swipeInterest=true;matching.interested=true;matching.saved=true;}renderPulseBar();
     } else {
       try{ await supabase.from('plan_swipes').upsert({user_id: currentUser?.id, plan_id: p.id, interested: false, updated_at: new Date().toISOString()}); }catch{}
+      const matching=posts.find(post=>post.id===p.id);if(matching){matching.swipeInterest=false;matching.interested=false;}
     }
   }
-  showToast(interested?'Interested \u2713 \u2014 saved':'Passed');
+  showToast(interested?'Interested \u2713 — added to your timeline':'Passed — we’ll show you less like this');
   await new Promise(r=>setTimeout(r,380));
+  if(!interested){
+    const remaining=swipeStack.slice(swipeIndex+1);
+    const category=String(p.category||'').toLowerCase();
+    const different=remaining.filter(item=>String(item.category||'').toLowerCase()!==category);
+    const similar=remaining.filter(item=>String(item.category||'').toLowerCase()===category);
+    swipeStack=[...swipeStack.slice(0,swipeIndex+1),...different,...similar];
+  }
   swipeIndex++;
   renderSwipeCard();
 }
