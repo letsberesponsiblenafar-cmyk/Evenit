@@ -1344,6 +1344,10 @@ function subscribeToEvenitLiveUpdates(){
   if(evenitLiveChannel)supabase.removeChannel(evenitLiveChannel);
   evenitLiveChannel=supabase.channel('evenit-live-'+currentUser.id)
     .on('postgres_changes',{event:'*',schema:'public',table:'plans'},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_members',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_entry_passes',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_swipes',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_verification_access',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_aftermath_posts'},()=>scheduleEvenitLiveRefresh('aftermath'))
     .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('notifications'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
@@ -1387,6 +1391,6 @@ window.addEventListener('evenit:network',event=>{const connected=Boolean(event.d
 window.addEventListener('evenit:native-back',()=>{if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
 setEvenitConnectionState(navigator.onLine);
-evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},45000);
+evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},20000);
 async function showNativeUpdatePrompt(){const capacitor=window.Capacitor;if(!capacitor?.isNativePlatform?.())return;try{const app=capacitor.Plugins?.App||capacitor.getPlugin?.('App');const info=await app?.getInfo?.();const current=Number(info?.build||0);const manifest=await fetch(`app-update.json?ts=${Date.now()}`,{cache:'no-store'}).then(response=>response.ok?response.json():null);if(!manifest||Number(manifest.versionCode)<=current)return;const banner=document.querySelector('#app-update-banner');if(!banner||sessionStorage.getItem(`evenit-update-dismissed-${manifest.versionCode}`))return;banner.querySelector('#app-update-message').textContent=manifest.message||'A new Evenit version is ready.';banner.querySelector('#app-update-link').href=manifest.apkUrl;banner.hidden=false;document.querySelector('#dismiss-app-update').onclick=()=>{sessionStorage.setItem(`evenit-update-dismissed-${manifest.versionCode}`,'true');banner.hidden=true}}catch(error){console.info('Update check unavailable',error)}}showNativeUpdatePrompt();
 })();
