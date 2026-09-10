@@ -16,7 +16,9 @@ let currentLocation=null;
 let collegeVerificationReady=false;
 let navHistory=[];
 function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.shift()}
-function goBack(){const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
+function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
+function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
+window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true})});
 function goHome(){
   navHistory=[];
   pageView.hidden=true;
@@ -96,8 +98,8 @@ function agendaStatus(post){
   return {label:'Waitlisted',className:'waitlisted'};
 }
 
-function showJoinedPage(){
-  pushNav('home');
+function showJoinedPage(options={}){
+  if(!options.restore)pushAppView({type:'agenda'});
   homeElements.forEach(e=>e.hidden=true);
   pageView.hidden=false;
   document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
@@ -179,10 +181,10 @@ function showJoinedPage(){
   });
 }
 
-function showAgendaDetail(planId){
+function showAgendaDetail(planId,options={}){
   const post=posts.find(item=>item.id===planId);
   if(!post)return;
-  pushNav('home');
+  if(!options.restore)pushAppView({type:'agenda-detail',planId});
   homeElements.forEach(element=>element.hidden=true);
   pageView.hidden=false;
   document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
@@ -201,7 +203,7 @@ function showAgendaDetail(planId){
   const leaveAction=!isOwner&&!isPast&&(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted')?`<button class="joined-action-btn leave-btn" data-agenda-leave="${escapeHtml(post.id)}">Leave event</button>`:'';
   const waitlistNote=post.membershipStatus==='waitlisted'?'<p class="agenda-note">You are on the waitlist. Your pass will appear here automatically if a place opens.</p>':'';
   pageView.innerHTML=`<section class="agenda-detail"><button class="back-to-home" data-agenda-back>← Your timeline</button><div class="agenda-hero"><span class="joined-badge ${status.className}">${status.label}</span><p class="overline">${escapeHtml(post.category||'Community event')}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="agenda-detail-grid"><section class="agenda-panel"><h3>Event details</h3><dl><div><dt>When</dt><dd>${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</dd></div><div><dt>Where</dt><dd><a href="${mapUrl(post.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(post.location||'Location to be announced')} ↗</a></dd></div><div><dt>Attendance</dt><dd>${escapeHtml(attendance)}</dd></div></dl><p class="agenda-description">${escapeHtml(post.caption)}</p></section><section class="agenda-panel"><h3>Your entry</h3><p class="agenda-requirement"><strong>Verification</strong>${escapeHtml(requirements)}</p>${waitlistNote}${verificationAction}${joinAction}${passAction}<div class="agenda-actions">${hostAction}${leaveAction}</div></section></div></section>`;
-  pageView.querySelector('[data-agenda-back]').onclick=showJoinedPage;
+  pageView.querySelector('[data-agenda-back]').onclick=goBack;
   pageView.querySelector('[data-agenda-pass]')?.addEventListener('click',()=>openEntryPass(post,post.entryPass));
   pageView.querySelector('[data-agenda-verify]')?.addEventListener('click',()=>openPlanVerification(post));
   pageView.querySelector('[data-agenda-join]')?.addEventListener('click',()=>toggleJoin(posts.indexOf(post)));

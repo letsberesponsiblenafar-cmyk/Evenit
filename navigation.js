@@ -120,6 +120,7 @@
   }
 
   window.addEventListener('popstate',event=>{
+    if(event.state?.evenitAppView)return;
     const route=event.state?.[stateKey]?.route||routeFromHash();
     renderRoute(route);
   });
