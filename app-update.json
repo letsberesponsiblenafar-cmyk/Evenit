@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "1.8",
+  "versionCode": 10,
+  "versionName": "1.9",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Your Home-only Plan Board and simplified Discover page are ready. Install this update for the latest Evenit experience."
+  "message": "Discover is now aftermath-only, with page-specific header controls. Install this update to load the corrected mobile experience."
 }
