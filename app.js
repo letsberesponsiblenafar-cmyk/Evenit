@@ -1533,6 +1533,21 @@ document.querySelector('#mobile-search-input')?.addEventListener('input',event=>
   document.querySelectorAll('#following-events .following-card,#discover-aftermath-feed .aftermath-card').forEach(card=>{card.hidden=Boolean(query)&&!card.textContent.toLowerCase().includes(query)});
 });
 updateMobileHeader();
+
+// Discover is the aftermath space. Upcoming events and the swipe mechanism
+// belong exclusively to Home, so they are not repeated here.
+const renderAftermathOnlyDiscover=renderDiscover;
+renderDiscover=function(){
+  renderAftermathOnlyDiscover();
+  const header=document.querySelector('.discover-header');
+  const eventFeed=document.querySelector('#following-events');
+  const swipeButton=document.querySelector('#open-swipe-discover');
+  if(header){
+    [...header.children].forEach(child=>{if(!child.classList.contains('page-topbar'))child.hidden=true;});
+  }
+  if(eventFeed)eventFeed.hidden=true;
+  if(swipeButton)swipeButton.hidden=true;
+};
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
