@@ -1642,6 +1642,223 @@ window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are of
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
 window.addEventListener('evenit:native-back',()=>{if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
+// Host-approved requests and entry passes. This layer intentionally replaces
+// the older auto-confirm path while retaining legacy confirmed memberships.
+const planQuestionsModal=document.querySelector('#plan-questions-modal');
+const planQuestionsForm=document.querySelector('#plan-questions-form');
+const planQuestionsFields=document.querySelector('#plan-questions-fields');
+let pendingPlanRequest=null;
+
+document.querySelector('#close-plan-questions')?.addEventListener('click',()=>{planQuestionsModal?.classList.remove('open');pendingPlanRequest=null;});
+planQuestionsModal?.addEventListener('click',event=>{if(event.target===planQuestionsModal){planQuestionsModal.classList.remove('open');pendingPlanRequest=null;}});
+
+async function loadPlanJoinQuestions(planId){
+  const {data,error}=await supabase.rpc('get_plan_join_questions',{p_plan_id:planId});
+  if(error)throw error;
+  return Array.isArray(data)?data:[];
+}
+
+function renderJoinQuestions(post,questions,button,afterRequest){
+  pendingPlanRequest={postId:post.id,button,afterRequest};
+  document.querySelector('#plan-questions-title').innerHTML=`Request a place at<br><em>${escapeHtml(post.title)}</em>`;
+  document.querySelector('#plan-questions-copy').textContent='Answer the organizer’s questions, then send your interest request.';
+  planQuestionsFields.innerHTML=questions.map((question,index)=>`<label class="request-question"><span>${index+1}. ${escapeHtml(question.prompt)}${question.required?' <b>Required</b>':''}</span><textarea data-request-question="${escapeHtml(question.id)}" rows="2" maxlength="1000" ${question.required?'required':''} placeholder="Your answer"></textarea></label>`).join('');
+  planQuestionsModal.classList.add('open');
+}
+
+async function completePlanInterest(post,button,answers=null){
+  if(button){button.disabled=true;button.textContent='Sending…';}
+  try{
+    const result=answers===null
+      ?await withEvenitTimeout(supabase.rpc('join_plan',{p_plan_id:post.id}),15000,'Your request took too long. Please try again.')
+      :await withEvenitTimeout(supabase.rpc('submit_plan_join_request',{p_plan_id:post.id,p_answers:answers}),15000,'Your request took too long. Please try again.');
+    if(result.error)throw result.error;
+    const row=rpcRow(result.data);
+    await refreshEvenitLiveData({quiet:true});
+    if(row?.status==='confirmed')showToast('You are confirmed — your entry pass is ready.');
+    else showToast('Interest sent. The organizer will choose who receives an entry pass.');
+    return true;
+  }catch(error){
+    showToast(`Could not send your request: ${error?.message||'Please try again.'}`);
+    return false;
+  }finally{
+    if(button){button.disabled=false;button.textContent='Join';}
+  }
+}
+
+async function requestPlanInterest(post,button,afterRequest){
+  if(!post)return false;
+  if(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.membershipStatus==='interested')return true;
+  if(!supabase||!currentUser){showToast('Log in to join this event');loginModal?.classList.add('open');return false;}
+  const requirement=joinRequirement(post);
+  if(requirement){showToast(requirement.message);openPlanVerification(post);return false;}
+  try{
+    const questions=await loadPlanJoinQuestions(post.id);
+    if(questions.length){renderJoinQuestions(post,questions,button,afterRequest);return false;}
+    const sent=await completePlanInterest(post,button);
+    if(sent&&afterRequest)afterRequest(post.id);
+    return sent;
+  }catch(error){showToast(`Could not prepare your request: ${error?.message||'Please try again.'}`);return false;}
+}
+
+planQuestionsForm?.addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(!pendingPlanRequest)return;
+  const pending=pendingPlanRequest;
+  const post=posts.find(item=>item.id===pending.postId);
+  if(!post){showToast('This event is no longer available.');return;}
+  const answers=[...planQuestionsFields.querySelectorAll('[data-request-question]')].map(field=>({question_id:field.dataset.requestQuestion,answer:field.value.trim()}));
+  const submit=planQuestionsForm.querySelector('[type=submit]');
+  submit.disabled=true;
+  submit.textContent='Sending…';
+  const sent=await completePlanInterest(post,null,answers);
+  submit.disabled=false;
+  submit.innerHTML='Send request <span>→</span>';
+  if(!sent)return;
+  planQuestionsModal.classList.remove('open');
+  pendingPlanRequest=null;
+  if(pending.afterRequest)pending.afterRequest(post.id);
+});
+
+startHomeJoin=async function(index,button){
+  return requestPlanInterest(posts[index],button);
+};
+
+joinTimelinePlan=async function(planId,button){
+  const post=posts.find(item=>item.id===planId);
+  if(!post)return false;
+  return requestPlanInterest(post,button,id=>showAgendaDetail(id));
+};
+
+const evenitAgendaPlans=getAgendaPlans;
+getAgendaPlans=function(){
+  return posts.filter(post=>post.user_id===currentUser?.id||post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.membershipStatus==='interested'||post.interested);
+};
+
+agendaStatus=function(post){
+  if(post.entryPass?.checked_in_at)return {label:'Attended',className:'attended'};
+  if(post.user_id===currentUser?.id)return {label:'Hosting',className:'owned'};
+  if(post.membershipStatus==='confirmed')return {label:'Confirmed',className:'confirmed'};
+  if(post.membershipStatus==='interested')return {label:'Request sent',className:'interested'};
+  if(post.interested)return {label:'Interested',className:'interested'};
+  return {label:'Waitlisted',className:'waitlisted'};
+};
+
+const evenitShowAgendaDetail=showAgendaDetail;
+showAgendaDetail=function(planId,options={}){
+  evenitShowAgendaDetail(planId,options);
+  const post=posts.find(item=>item.id===planId);
+  if(post?.membershipStatus!=='interested')return;
+  const entry=pageView.querySelector('.agenda-entry-panel');
+  if(!entry)return;
+  const primary=entry.querySelector('.agenda-primary-action');
+  if(primary)primary.innerHTML='<p class="interest-sent-state">Interest sent ✓<small>The organizer will notify you if they issue an entry pass.</small></p>';
+  entry.querySelector('.agenda-panel-heading span')?.replaceChildren(document.createTextNode('Request pending'));
+};
+
+const evenitRenderHomeEventCards=renderHomeEventCards;
+renderHomeEventCards=function(){
+  if(!postsEl)return;
+  const now=Date.now();
+  postsEl.innerHTML=posts.map((post,index)=>{
+    const isOwner=Boolean(currentUser?.id&&post.user_id&&post.user_id===currentUser.id);
+    const isMember=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.membershipStatus==='interested';
+    const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
+    const requirement=joinRequirement(post);
+    const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} confirmed`;
+    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Join';
+    const disabled=isOwner||isMember||isPast;
+    return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
+      <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
+        <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
+        <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
+      </header>
+      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}">
+        <span>${escapeHtml(post.category||'Event')}</span>
+        <h2>${escapeHtml(post.title)}</h2>
+        <p>${escapeHtml(post.location||'Location to be announced')}</p>
+      </div>
+      <div class="home-event-content">
+        <p class="home-event-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>
+        ${post.caption?`<p class="home-event-description">${escapeHtml(post.caption)}</p>`:''}
+        <div class="home-event-details"><span>${escapeHtml(attendance)}</span>${requirement&&!isMember?`<span class="home-event-requirement">${escapeHtml(requirement.label)}</span>`:''}</div>
+        <button class="home-join-button ${isMember?'is-joined':''} ${requirement&&!isMember?'has-requirement':''}" data-home-join="${index}" ${disabled?'disabled':''}>${buttonLabel}</button>
+      </div>
+    </article>`;
+  }).join('')||'<div class="aftermath-empty"><div class="aftermath-empty-icon">◌</div><h3>No events yet</h3><p>New plans will appear here as soon as they are published.</p></div>';
+  document.querySelectorAll('[data-home-join]').forEach(button=>button.addEventListener('click',()=>startHomeJoin(Number(button.dataset.homeJoin),button)));
+  enhanceHomePlanCards();
+};
+
+renderInsights=async function(planId){
+  const post=posts.find(item=>item.id===planId);
+  if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return;}
+  activeInsightsPlanId=planId;
+  showInsightsShell();
+  pageView.innerHTML='<div class="insights-page"><button class="back-link" id="back-from-insights">← Back</button><p class="overline">Event insights</p><h2>Loading requests...</h2></div>';
+  const {data,error}=await supabase.rpc('get_plan_insights',{p_plan_id:planId});
+  if(error){pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-insights">← Back</button><p class="overline">Event insights</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(error.message)}</p></div>`;return;}
+  const info=typeof data==='string'?JSON.parse(data):data;
+  const plan=info?.plan||post;
+  const metrics=info?.metrics||{};
+  const attendees=Array.isArray(info?.attendees)?info.attendees:[];
+  const interested=attendees.filter(item=>item.status==='interested'||item.status==='waitlisted');
+  const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);
+  const attended=attendees.filter(item=>item.attended);
+  const answerList=item=>Array.isArray(item.answers)&&item.answers.length?`<dl class="request-answers">${item.answers.map(answer=>`<div><dt>${escapeHtml(answer.question||'Question')}</dt><dd>${escapeHtml(answer.answer||'—')}</dd></div>`).join('')}</dl>`:'';
+  const person=item=>`<button class="attendee-card ${item.attended?'is-attended':''}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small></span><b>${item.attended?'Attended ✓':'Pass sent'}</b></button>`;
+  const candidate=item=>`<label class="pass-candidate"><input type="checkbox" data-pass-candidate value="${escapeHtml(item.id)}"><span class="pass-candidate-avatar"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""></span><span class="pass-candidate-main"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')} · ${item.status==='waitlisted'?'Waitlisted':'Interest request'}</small>${answerList(item)}</span></label>`;
+  pageView.innerHTML=`<div class="insights-page host-approval-insights"><button class="back-link" id="back-from-insights">← Back to your feed</button><div class="insights-header"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div></div><div class="insights-metrics"><div class="insights-metric"><strong>${interested.length}</strong><span>Requests</span></div><div class="insights-metric"><strong>${metrics.joined||0}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Attended</span></div><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reach</span></div></div><section class="insights-section pass-approval-section"><div class="approval-heading"><div><h3>Interest requests (${interested.length})</h3><p>Select the people who should receive a QR entry pass.</p></div><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty">No interest requests yet. People appear here after they request a place.</div>'}</div></section><div class="insights-actions"><button class="scan-button" id="open-scan">Scan entry pass <span>↗</span></button><span class="insights-help">Only people you approve receive a scannable QR pass.</span></div><div class="insights-section"><h3>Pass holders (${confirmed.length})</h3>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty">No passes sent yet.</div>'}</div><div class="insights-section"><h3>Attended (${attended.length})</h3>${attended.length?attended.map(person).join(''):'<div class="insights-empty">No one checked in yet.</div>'}</div></div>`;
+  document.querySelector('#open-scan')?.addEventListener('click',()=>openScanModal(planId));
+  document.querySelector('#back-from-insights')?.addEventListener('click',()=>goBack());
+  document.querySelector('#issue-selected-passes')?.addEventListener('click',async event=>{
+    const selected=[...pageView.querySelectorAll('[data-pass-candidate]:checked')].map(input=>input.value);
+    if(!selected.length){showToast('Select at least one request first.');return;}
+    const button=event.currentTarget;
+    button.disabled=true;button.textContent=`Sending ${selected.length}…`;
+    let issued=0;const failures=[];
+    for(const userId of selected){
+      const result=await supabase.rpc('issue_plan_entry_pass',{p_plan_id:planId,p_user_id:userId});
+      if(result.error)failures.push(result.error.message);else issued++;
+    }
+    await refreshEvenitLiveData({quiet:true});
+    await renderInsights(planId);
+    showToast(issued?`${issued} ${issued===1?'entry pass':'entry passes'} sent.${failures.length?' Some requests could not be approved.':''}`:failures[0]||'No passes were sent.');
+  });
+};
+
+document.querySelector('#post-form').onsubmit=async event=>{
+  event.preventDefault();
+  const form=event.currentTarget;
+  const data=new FormData(form);
+  const button=form.querySelector('[type="submit"]');
+  try{
+    if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then try again.');
+    await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
+    const startsAt=new Date(String(data.get('when')||''));
+    if(Number.isNaN(startsAt.getTime()))throw new Error('Choose a valid date and time for the event.');
+    const capacityValue=String(data.get('capacity')||'').trim();
+    const capacity=capacityValue?Number(capacityValue):null;
+    if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1))throw new Error('Attendance limit must be a whole number greater than zero.');
+    const questions=[...form.querySelectorAll('[data-plan-question]')].map(field=>field.value.trim()).filter(Boolean);
+    if(questions.length>10)throw new Error('You can add up to 10 guest questions.');
+    const latitudeValue=String(data.get('plan_latitude')||'').trim();
+    const longitudeValue=String(data.get('plan_longitude')||'').trim();
+    const latitude=latitudeValue?Number(latitudeValue):null;
+    const longitude=longitudeValue?Number(longitudeValue):null;
+    if((latitude===null)!==(longitude===null)||!Number.isFinite(latitude??0)||!Number.isFinite(longitude??0))throw new Error('The selected location is not valid.');
+    button.disabled=true;button.textContent='Publishing…';
+    const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_with_questions',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_capacity:capacity,p_requires_college_verification:data.get('requires_college_verification')==='on',p_questions:questions,p_latitude:latitude,p_longitude:longitude}),15000,'Publishing timed out. Check your connection and try again.');
+    if(error)throw error;
+    if(!planId)throw new Error('The event was not confirmed by the database.');
+    modal.classList.remove('open');
+    form.reset();
+    await refreshEvenitLiveData({quiet:true});
+    showToast('Your plan is live everywhere ✦');
+  }catch(error){showToast(`Could not publish: ${error?.message||'Please try again.'}`);}
+  finally{button.disabled=false;button.innerHTML='Create plan <span>→</span>';}
+};
+
 setEvenitConnectionState(navigator.onLine);
 evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},20000);
 async function showNativeUpdatePrompt(){const capacitor=window.Capacitor;if(!capacitor?.isNativePlatform?.())return;try{const app=capacitor.Plugins?.App||capacitor.getPlugin?.('App');const info=await app?.getInfo?.();const current=Number(info?.build||0);const manifest=await fetch(`app-update.json?ts=${Date.now()}`,{cache:'no-store'}).then(response=>response.ok?response.json():null);if(!manifest||Number(manifest.versionCode)<=current)return;const banner=document.querySelector('#app-update-banner');if(!banner||sessionStorage.getItem(`evenit-update-dismissed-${manifest.versionCode}`))return;banner.querySelector('#app-update-message').textContent=manifest.message||'A new Evenit version is ready.';banner.querySelector('#app-update-link').href=manifest.apkUrl;banner.hidden=false;document.querySelector('#dismiss-app-update').onclick=()=>{sessionStorage.setItem(`evenit-update-dismissed-${manifest.versionCode}`,'true');banner.hidden=true}}catch(error){console.info('Update check unavailable',error)}}showNativeUpdatePrompt();

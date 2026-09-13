@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "1.11",
+  "versionCode": 13,
+  "versionName": "1.12",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Home has been rebuilt as a single-action event-card feed, with a verified Join flow and swipe-to-join support."
+  "message": "Create plans with guest questions and location choice, then approve each QR entry pass from Insights."
 }
