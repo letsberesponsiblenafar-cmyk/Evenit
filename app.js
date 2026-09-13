@@ -1577,7 +1577,7 @@ function renderHomeEventCards(){
   if(!postsEl)return;
   const now=Date.now();
   postsEl.innerHTML=posts.map((post,index)=>{
-    const isOwner=post.user_id===currentUser?.id;
+    const isOwner=Boolean(currentUser?.id&&post.user_id&&post.user_id===currentUser.id);
     const isMember=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted';
     const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
     const requirement=joinRequirement(post);
