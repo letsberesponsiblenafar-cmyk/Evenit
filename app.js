@@ -1485,6 +1485,54 @@ function enhanceHomePlanCards(){
   });
 }
 renderPosts();
+
+// The mobile app bar has one purpose per page; it never duplicates controls
+// already available below it.
+const baseUpdateMobileHeader=updateMobileHeader;
+let mobileMessageFilter='all';
+updateMobileHeader=function(page){
+  baseUpdateMobileHeader(page);
+  const activePage=page||document.querySelector('[data-page].active')?.dataset.page||'home';
+  const header=document.querySelector('.mobile-header');
+  const action=document.querySelector('#mobile-header-action');
+  const searchPanel=document.querySelector('#mobile-search-panel');
+  if(!header||!action)return;
+  header.classList.toggle('page-profile',activePage==='profile');
+  header.classList.toggle('page-discover',activePage==='discover');
+  header.classList.toggle('page-messages',activePage==='messages'||activePage==='groups');
+  if(activePage!=='discover'&&searchPanel)searchPanel.hidden=true;
+  if(activePage==='discover'){
+    action.innerHTML='<span>⌕</span>';
+    action.setAttribute('aria-label','Search events');
+  }else if(activePage==='messages'||activePage==='groups'){
+    action.innerHTML='<span>☷</span>';
+    action.setAttribute('aria-label','Filter messages');
+  }else{
+    action.innerHTML='<span>♡</span><b class="badge">3</b>';
+    action.setAttribute('aria-label','Open notifications');
+  }
+};
+document.querySelector('#mobile-header-action')?.addEventListener('click',()=>{
+  const page=document.querySelector('[data-page].active')?.dataset.page||'home';
+  if(page==='discover'){
+    const panel=document.querySelector('#mobile-search-panel');
+    panel.hidden=!panel.hidden;
+    if(!panel.hidden)document.querySelector('#mobile-search-input')?.focus();
+    return;
+  }
+  if(page==='messages'||page==='groups'){
+    mobileMessageFilter=mobileMessageFilter==='all'?'unread':'all';
+    document.querySelectorAll('.message').forEach((message,index)=>message.hidden=mobileMessageFilter==='unread'&&index>0);
+    showToast(mobileMessageFilter==='unread'?'Showing unread messages':'Showing all messages');
+    return;
+  }
+  setPage('notifications');
+});
+document.querySelector('#mobile-search-input')?.addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  document.querySelectorAll('#following-events .following-card,#discover-aftermath-feed .aftermath-card').forEach(card=>{card.hidden=Boolean(query)&&!card.textContent.toLowerCase().includes(query)});
+});
+updateMobileHeader();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
