@@ -1,6 +1,6 @@
 {
-  "versionCode": 10,
-  "versionName": "1.9",
+  "versionCode": 11,
+  "versionName": "1.10",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Discover is now aftermath-only, with page-specific header controls. Install this update to load the corrected mobile experience."
+  "message": "Home has been rebuilt as a single-action event-card feed, with a verified Join flow and swipe-to-join support."
 }

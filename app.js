@@ -412,6 +412,28 @@ function renderAftermathFeed(items){
 let activeAftermathCommentId=null;
 async function joinTimelinePlan(planId,button){const post=posts.find(item=>item.id===planId);if(!post)return false;if(post.requiresCollegeVerification&&!post.verificationComplete){openPlanVerification(post);return false}if(button){button.disabled=true;button.textContent='Joining…'}const joined=await toggleJoin(posts.indexOf(post));if(joined)showAgendaDetail(planId);else if(button){button.disabled=false;button.textContent='Join this event'}return joined}
 async function toggleJoin(index){const post=posts[index];if(!post)return false;if(!supabase||!currentUser){showToast('Log in before joining this event');loginModal?.classList.add('open');return false}if(!post.id){post.joined=!post.joined;renderPosts();return true}const isMember=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted';if(!isMember&&post.requiresCollegeVerification&&!post.verificationComplete){openPlanVerification(post);return false}try{if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then try again.');await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');const result=await withEvenitTimeout(isMember?supabase.rpc('leave_plan',{p_plan_id:post.id}):supabase.rpc('join_plan',{p_plan_id:post.id}),15000,'The event could not be updated in time. Please try again.');if(result.error)throw result.error;const row=rpcRow(result.data);if(isMember){showToast(row?.promoted_user_id?'You left the event. A person from the waitlist was promoted.':'You left this event');}else if(row?.status==='confirmed'){showToast(row.confirmation_memo?`You’re confirmed. ${row.confirmation_memo}`:'You’re confirmed for this event ✦')}else{showToast(`You’re on the waitlist${row?.queue_position?` at #${row.queue_position}`:''}. Confirmed guests receive the entry pass.`)}await refreshEvenitLiveData({quiet:true});return true}catch(error){showToast(`Could not update your event: ${error?.message||'Please try again.'}`);return false}}
+function joinRequirement(post){
+  if(!post?.requiresCollegeVerification)return null;
+  if(!post.hasCollegeDetails)return {state:'details',label:'College details required',message:'This event requires your private college and enrollment details before you can join.'};
+  if(!post.verificationShared)return {state:'authorization',label:'Verification required',message:'This event requires your approval to share those private details with its organizer.'};
+  return null;
+}
+async function startHomeJoin(index,button){
+  const post=posts[index];
+  if(!post)return false;
+  if(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted')return true;
+  if(!supabase||!currentUser){showToast('Log in to join this event');loginModal?.classList.add('open');return false;}
+  const requirement=joinRequirement(post);
+  if(requirement){
+    showToast(requirement.message);
+    openPlanVerification(post);
+    return false;
+  }
+  if(button){button.disabled=true;button.textContent='Joining…';}
+  const joined=await toggleJoin(index);
+  if(!joined&&button){button.disabled=false;button.textContent='Join';}
+  return joined;
+}
 let activeCommentPlanId=null;
 async function openComments(planId){
   activeCommentPlanId=planId;
@@ -839,7 +861,7 @@ document.addEventListener('click',e=>{const saved=e.target.closest('[data-saved-
 function renderSavedPage(){pageView.innerHTML=`<div class="page-header saved-header"><p class="overline">Keep it close</p><h2>Saved</h2><p>Plans, people, and groups you want to return to.</p></div><div class="saved-tabs"><button class="${activeSavedCollection==='plans'?'active':''}" data-saved-collection="plans">Plans</button><button class="${activeSavedCollection==='people'?'active':''}" data-saved-collection="people">People</button><button class="${activeSavedCollection==='groups'?'active':''}" data-saved-collection="groups">Groups</button></div><div id="saved-content"></div>`;renderSavedCollection(activeSavedCollection);}
 function renderSavedCollection(collection){activeSavedCollection=collection;const content=document.querySelector('#saved-content');if(!content)return;document.querySelectorAll('.saved-tabs button').forEach(button=>button.classList.toggle('active',button.dataset.savedCollection===collection));const labels={plans:'Saved plans',people:'Saved people',groups:'Saved groups'};if(collection!=='plans'){content.innerHTML=`<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>No ${labels[collection].toLowerCase()} yet</h3><p>When you save ${collection}, they’ll be collected here.</p></div>`;return;}const items=posts.filter(post=>savedEventIds.has(post.id||post.title));content.innerHTML=items.length?`<div class="saved-events">${items.map(post=>`<button class="profile-event"><span>✦</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} · ${post.joinedCount||0} joined</small></div></button>`).join('')}</div>`:`<div class="aftermath-empty"><div class="aftermath-empty-icon">✦</div><h3>No saved plans yet</h3><p>Save an event from Discover and it will stay here.</p></div>`;}
 const editModal=document.querySelector('#edit-modal');const editForm=document.querySelector('#edit-form');document.addEventListener('click',e=>{const identity=e.target.closest('.post-head img,.post-head strong,.suggestion img,.suggestion strong');if(identity){e.preventDefault();setPage('profile')}if(e.target.closest('.edit-profile')){const meta=currentUser?.user_metadata||{};editForm.full_name.value=meta.full_name||'';editForm.username.value=meta.username||'';editForm.email.value=currentUser?.email||'';editModal.classList.add('open');loadProfileDetails()}});document.querySelector('#close-edit').onclick=()=>editModal.classList.remove('open');editModal.onclick=e=>{if(e.target===editModal)editModal.classList.remove('open')};
-const planVerificationModal=document.querySelector('#plan-verification-modal');const planVerificationForm=document.querySelector('#plan-verification-form');let pendingVerificationPlanId=null;async function openPlanVerification(post){if(!post||!currentUser)return;pendingVerificationPlanId=post.id;document.querySelector('#plan-verification-copy').textContent=`${post.title} needs these details to verify your entry. They remain private on your profile and are shared only with this event’s organizer after you authorize it below.`;planVerificationForm.reset();planVerificationModal.classList.add('open');const {data}=await supabase.from('profiles').select('college,enrollment_id').eq('id',currentUser.id).maybeSingle();if(data){planVerificationForm.college.value=data.college||'';planVerificationForm.enrollment_id.value=data.enrollment_id||'';}}document.querySelector('#close-plan-verification').onclick=()=>planVerificationModal.classList.remove('open');planVerificationModal.onclick=event=>{if(event.target===planVerificationModal)planVerificationModal.classList.remove('open')};planVerificationForm.onsubmit=async event=>{event.preventDefault();if(!currentUser||!pendingVerificationPlanId)return;const button=planVerificationForm.querySelector('[type=submit]');const data=new FormData(planVerificationForm);const college=String(data.get('college')||'').trim();const enrollmentId=String(data.get('enrollment_id')||'').trim();if(!college||!enrollmentId||data.get('share_verification')!=='on'){showToast('Add both details and confirm access for this organizer.');return}button.disabled=true;button.textContent='Authorizing…';try{const {error}=await supabase.from('profiles').update({college,enrollment_id:enrollmentId}).eq('id',currentUser.id);if(error)throw error;const {error:accessError}=await supabase.rpc('grant_plan_verification_access',{p_plan_id:pendingVerificationPlanId});if(accessError)throw accessError;collegeVerificationReady=true;const planId=pendingVerificationPlanId;planVerificationModal.classList.remove('open');await loadPlans();const plan=posts.find(post=>post.id===planId);if(plan?.membershipStatus==='confirmed'||plan?.membershipStatus==='waitlisted')showAgendaDetail(planId);else if(plan)await joinTimelinePlan(planId);showToast('Verification shared with this organizer only.')}catch(error){showToast(`Could not save verification: ${error?.message||'Try again.'}`)}finally{button.disabled=false;button.innerHTML='Share and join <span>→</span>'}};
+const planVerificationModal=document.querySelector('#plan-verification-modal');const planVerificationForm=document.querySelector('#plan-verification-form');let pendingVerificationPlanId=null;async function openPlanVerification(post){if(!post||!currentUser)return;pendingVerificationPlanId=post.id;const missingDetails=!post.hasCollegeDetails;document.querySelector('#plan-verification-copy').textContent=missingDetails?`${post.title} requires your college and enrollment ID before you can join. These details stay private on your profile and are shared only with this event’s organizer after you approve it below.`:`${post.title} requires your approval before the organizer can view your saved college and enrollment details. They are shared only for this event.`;planVerificationForm.reset();planVerificationModal.classList.add('open');const {data}=await supabase.from('profiles').select('college,enrollment_id').eq('id',currentUser.id).maybeSingle();if(data){planVerificationForm.college.value=data.college||'';planVerificationForm.enrollment_id.value=data.enrollment_id||'';}}document.querySelector('#close-plan-verification').onclick=()=>planVerificationModal.classList.remove('open');planVerificationModal.onclick=event=>{if(event.target===planVerificationModal)planVerificationModal.classList.remove('open')};planVerificationForm.onsubmit=async event=>{event.preventDefault();if(!currentUser||!pendingVerificationPlanId)return;const button=planVerificationForm.querySelector('[type=submit]');const data=new FormData(planVerificationForm);const college=String(data.get('college')||'').trim();const enrollmentId=String(data.get('enrollment_id')||'').trim();if(!college||!enrollmentId||data.get('share_verification')!=='on'){showToast('Add both details and confirm access for this organizer.');return}button.disabled=true;button.textContent='Authorizing…';try{const {error}=await supabase.from('profiles').update({college,enrollment_id:enrollmentId}).eq('id',currentUser.id);if(error)throw error;const {error:accessError}=await supabase.rpc('grant_plan_verification_access',{p_plan_id:pendingVerificationPlanId});if(accessError)throw accessError;collegeVerificationReady=true;const planId=pendingVerificationPlanId;planVerificationModal.classList.remove('open');await loadPlans();const plan=posts.find(post=>post.id===planId);if(plan?.membershipStatus==='confirmed'||plan?.membershipStatus==='waitlisted')showAgendaDetail(planId);else if(plan)await joinTimelinePlan(planId);showToast('Verification saved — finishing your join now.')}catch(error){showToast(`Could not save verification: ${error?.message||'Try again.'}`)}finally{button.disabled=false;button.innerHTML='Share and join <span>→</span>'}};
 async function getFreshEvenitUser(){if(!supabase)throw new Error('Live database connection is unavailable.');const {data,error}=await supabase.auth.refreshSession();const user=data?.user||data?.session?.user;if(error||!user)throw new Error('Your login expired. Please log in again.');currentUser=user;return user}
 async function uploadProfileMedia(file,type,userId){if(!file||!file.name)return null;const extension=file.name.split('.').pop().toLowerCase();const path=`${userId}/${type}-${Date.now()}.${extension}`;const {error}=await supabase.storage.from('profile-media').upload(path,file,{upsert:true,contentType:file.type});if(error)throw error;return supabase.storage.from('profile-media').getPublicUrl(path).data.publicUrl}
 editForm.onsubmit=async e=>{e.preventDefault();const saveButton=editForm.querySelector('[type="submit"]');try{if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then save.');const user=await getFreshEvenitUser();const data=new FormData(editForm);saveButton.disabled=true;saveButton.textContent='Saving…';const avatarUrl=await uploadProfileMedia(data.get('avatar'),'avatar',user.id);const bannerUrl=await uploadProfileMedia(data.get('banner'),'banner',user.id);const profile={id:user.id,full_name:String(data.get('full_name')||'').trim(),username:String(data.get('username')||'').trim(),about:String(data.get('about')||'').trim()||null,neighborhood:String(data.get('neighborhood')||'').trim()||null,college:String(data.get('college')||'').trim()||null,enrollment_id:String(data.get('enrollment_id')||'').trim()||null,is_private:data.get('profile_visibility')==='private',...(avatarUrl?{avatar_url:avatarUrl}:{}),...(bannerUrl?{banner_url:bannerUrl}:{})};if(!profile.full_name||!profile.username)throw new Error('Full name and username are required.');const {error:profileError}=await supabase.from('profiles').upsert(profile,{onConflict:'id'});if(profileError)throw profileError;const metadata={...user.user_metadata,full_name:profile.full_name,username:profile.username,...(avatarUrl?{avatar_url:avatarUrl}:{}),...(bannerUrl?{banner_url:bannerUrl}:{})};const {data:result,error:authError}=await supabase.auth.updateUser({data:metadata});if(authError)throw authError;currentUser=result.user||user;updateAccountUI();editModal.classList.remove('open');renderProfile();showToast('Profile updated everywhere ✦')}catch(error){showToast(`Could not save profile: ${error?.message||'Try again.'}`)}finally{saveButton.disabled=false;saveButton.innerHTML='Save profile <span>✓</span>'}};
@@ -1548,6 +1570,73 @@ renderDiscover=function(){
   });
   applyAdminContent();applyAdminStyles();
 };
+
+// Home is a quiet, scrollable event board. Each card has one primary action:
+// join. Swiping right invokes the same verified join path; swiping left passes.
+function renderHomeEventCards(){
+  if(!postsEl)return;
+  const now=Date.now();
+  postsEl.innerHTML=posts.map((post,index)=>{
+    const isOwner=post.user_id===currentUser?.id;
+    const isMember=post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted';
+    const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
+    const requirement=joinRequirement(post);
+    const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;
+    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':isPast?'Event ended':'Join';
+    const disabled=isOwner||isMember||isPast;
+    return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
+      <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
+        <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
+        <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
+      </header>
+      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}">
+        <span>${escapeHtml(post.category||'Event')}</span>
+        <h2>${escapeHtml(post.title)}</h2>
+        <p>${escapeHtml(post.location||'Location to be announced')}</p>
+      </div>
+      <div class="home-event-content">
+        <p class="home-event-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>
+        ${post.caption?`<p class="home-event-description">${escapeHtml(post.caption)}</p>`:''}
+        <div class="home-event-details"><span>${escapeHtml(attendance)}</span>${requirement?`<span class="home-event-requirement">${escapeHtml(requirement.label)}</span>`:''}</div>
+        <button class="home-join-button ${isMember?'is-joined':''} ${requirement?'has-requirement':''}" data-home-join="${index}" ${disabled?'disabled':''}>${buttonLabel}</button>
+      </div>
+    </article>`;
+  }).join('')||'<div class="aftermath-empty"><div class="aftermath-empty-icon">◌</div><h3>No events yet</h3><p>New plans will appear here as soon as they are published.</p></div>';
+  document.querySelectorAll('[data-home-join]').forEach(button=>button.addEventListener('click',()=>startHomeJoin(Number(button.dataset.homeJoin),button)));
+  enhanceHomePlanCards();
+}
+renderPosts=function(){renderHomeEventCards();};
+function enhanceHomePlanCards(){
+  document.querySelectorAll('#posts .home-event-card').forEach(card=>{
+    if(card.dataset.homeActionsReady)return;
+    card.dataset.homeActionsReady='true';
+    const index=Number(card.dataset.planIndex);
+    if(!Number.isFinite(index))return;
+    let startX=0,startY=0,dragging=false;
+    card.addEventListener('pointerdown',event=>{
+      if(event.target.closest('button,a,input,textarea,select,[data-profile-id]'))return;
+      startX=event.clientX;startY=event.clientY;dragging=true;card.setPointerCapture?.(event.pointerId);
+    });
+    card.addEventListener('pointermove',event=>{
+      if(!dragging)return;
+      const dx=event.clientX-startX,dy=event.clientY-startY;
+      if(Math.abs(dx)<Math.abs(dy))return;
+      card.style.transform=`translateX(${Math.max(-105,Math.min(105,dx))}px) rotate(${dx/28}deg)`;
+      card.classList.toggle('swipe-join-preview',dx>42);
+      card.classList.toggle('swipe-dismiss-preview',dx<-42);
+    });
+    card.addEventListener('pointerup',async event=>{
+      if(!dragging)return;
+      dragging=false;
+      const dx=event.clientX-startX;
+      card.style.transform='';card.classList.remove('swipe-join-preview','swipe-dismiss-preview');
+      if(dx>92)await startHomeJoin(index,card.querySelector('[data-home-join]'));
+      else if(dx<-92){dismissHomePlan(card,index);showToast('Not interested — we will show you less like this.');}
+    });
+    card.addEventListener('pointercancel',()=>{dragging=false;card.style.transform='';card.classList.remove('swipe-join-preview','swipe-dismiss-preview');});
+  });
+}
+renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
