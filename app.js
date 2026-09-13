@@ -814,7 +814,7 @@ const create=document.querySelector('#profile-post');if(create)create.onclick=()
 }
 document.querySelectorAll('[data-page]').forEach(link=>link.onclick=e=>{e.preventDefault();setPage(link.dataset.page)});
 if(supabase){supabase.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;updateAccountUI();loadPlans();loadAftermathFeed();});supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAccountUI();if(session?.user&&pageView&&!pageView.hidden)renderProfile();loadAftermathFeed();})}else{updateAccountUI();loadPlans();loadAftermathFeed();}
-const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
+const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#open-modal-header')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
 const loginModal=document.querySelector('#login-modal');const openLogin=()=>loginModal.classList.add('open');document.querySelector('#open-login').onclick=openLogin;document.querySelector('#open-login-mobile').onclick=openLogin;document.querySelector('#close-login').onclick=()=>loginModal.classList.remove('open');loginModal.onclick=e=>{if(e.target===loginModal)loginModal.classList.remove('open')};document.querySelector('#login-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signInWithPassword({email:data.get('email'),password:data.get('password')});if(error){showToast(error.message);return}currentUser=result.user;updateAccountUI();loginModal.classList.remove('open');showToast('Welcome back to upneXt ✦')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};
 const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo:window.location.href,data:{username:data.get('username'),full_name:data.get('full_name'),neighborhood:data.get('neighborhood'),interest:data.get('interest')}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created and you are signed in ✦':'Check your email to verify your profile, then log in ✦');setPage('profile')};
 document.querySelector('#post-form').onsubmit=async e=>{e.preventDefault();const form=e.target;const data=new FormData(form);const publishButton=form.querySelector('[type="submit"]');if(!supabase){showToast('Connection setup is unavailable. Reopen the app while online.');return}if(!navigator.onLine){showToast('You are offline. Connect to Wi-Fi or mobile data, then try again.');return}const {data:sessionData,error:sessionError}=await supabase.auth.getSession();const liveUser=sessionData?.session?.user;if(sessionError||!liveUser){currentUser=null;updateAccountUI();showToast('Your login expired. Please log in again before publishing.');loginModal.classList.add('open');return}currentUser=liveUser;const capacityValue=String(data.get('capacity')||'').trim();const capacity=capacityValue?Number(capacityValue):null;if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1)){showToast('Attendance limit must be a whole number greater than zero');return}const startsValue=String(data.get('when')||'').trim();const startsAt=startsValue?new Date(startsValue):null;if(!startsAt||Number.isNaN(startsAt.getTime())){showToast('Choose a valid date and time for the event.');return}publishButton.disabled=true;publishButton.textContent='Publishing…';try{let {data:profile,error:profileError}=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();if(profileError)throw profileError;if(!profile){const metadata=currentUser.user_metadata||{};const {error:createProfileError}=await supabase.from('profiles').upsert({id:currentUser.id,username:metadata.username||currentUser.email.split('@')[0],full_name:metadata.full_name||null});if(createProfileError)throw new Error('Your profile needs to finish syncing: '+createProfileError.message);const result=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();profile=result.data}const {data:plan,error}=await supabase.from('plans').insert({user_id:currentUser.id,title:String(data.get('title')).trim(),location:String(data.get('where')).trim(),starts_at:startsAt.toISOString(),caption:String(data.get('caption')||'').trim()||null,category:data.get('category'),capacity,neighborhood:profile?.neighborhood||null,requires_college_verification:data.get('requires_college_verification')==='on'}).select('id').single();if(error)throw error;if(profile?.latitude!==null&&profile?.latitude!==undefined&&profile?.longitude!==null&&profile?.longitude!==undefined){const {error:locationError}=await supabase.from('plan_locations').upsert({plan_id:plan.id,latitude:profile.latitude,longitude:profile.longitude,updated_at:new Date().toISOString()});if(locationError)showToast('Plan published; nearby-distance matching is still syncing.')}const passMemo=String(data.get('pass_memo')||'').trim();if(passMemo){const {error:passError}=await supabase.from('plan_passes').upsert({plan_id:plan.id,memo:passMemo,updated_at:new Date().toISOString()});if(passError)showToast('Plan published; the entry note could not be saved.')}modal.classList.remove('open');form.reset();await loadPlans();showToast('Your plan is live on Evenit ✦')}catch(error){console.error('Plan publish failed',error);showToast(`Could not publish: ${error?.message||'Please try again.'}`)}finally{publishButton.disabled=false;publishButton.innerHTML='Create plan <span>→</span>'}};
@@ -1448,6 +1448,43 @@ async function refreshEvenitLiveData({quiet=false}={}){
   finally{evenitRefreshing=false;setEvenitConnectionState(navigator.onLine);}
 }
 document.querySelector('#connection-refresh')?.addEventListener('click',()=>refreshEvenitLiveData());
+
+// Home is a vertical, individual event stream. Each plan can be acted on from
+// its own card without turning the feed into a stacked swipe deck.
+const renderPostsForHome=renderPosts;
+renderPosts=function(){
+  const activeHomes=[...document.querySelectorAll('[data-page="home"].active')];
+  activeHomes.forEach(link=>link.classList.remove('active'));
+  renderPostsForHome();
+  activeHomes.forEach(link=>link.classList.add('active'));
+  if(pageView?.hidden)enhanceHomePlanCards();
+};
+function dismissHomePlan(card,index){
+  const post=posts[index];
+  if(!post)return;
+  const finish=()=>{card.classList.add('plan-dismissed');setTimeout(()=>card.remove(),220);};
+  if(supabase&&currentUser&&post.id){
+    supabase.from('plan_swipes').upsert({plan_id:post.id,user_id:currentUser.id,interested:false},{onConflict:'plan_id,user_id'}).then(finish);
+  }else finish();
+}
+function enhanceHomePlanCards(){
+  document.querySelectorAll('#posts .post').forEach(card=>{
+    if(card.dataset.homeActionsReady)return;
+    card.dataset.homeActionsReady='true';
+    const index=Number(card.querySelector('.join-plan')?.dataset.index);
+    if(!Number.isFinite(index))return;
+    const dismiss=document.createElement('button');
+    dismiss.type='button';dismiss.className='plan-dismiss';dismiss.setAttribute('aria-label','Not interested');dismiss.textContent='×';
+    dismiss.onclick=event=>{event.stopPropagation();dismissHomePlan(card,index);};
+    card.querySelector('.post-body')?.append(dismiss);
+    let startX=0,startY=0,dragging=false;
+    card.addEventListener('pointerdown',event=>{if(event.target.closest('button,a,input,textarea,select'))return;startX=event.clientX;startY=event.clientY;dragging=true;card.setPointerCapture?.(event.pointerId);});
+    card.addEventListener('pointermove',event=>{if(!dragging)return;const dx=event.clientX-startX,dy=event.clientY-startY;if(Math.abs(dx)<Math.abs(dy))return;card.style.transform=`translateX(${Math.max(-105,Math.min(105,dx))}px) rotate(${dx/28}deg)`;card.classList.toggle('swipe-join-preview',dx>42);card.classList.toggle('swipe-dismiss-preview',dx<-42);});
+    card.addEventListener('pointerup',event=>{if(!dragging)return;dragging=false;const dx=event.clientX-startX;card.style.transform='';card.classList.remove('swipe-join-preview','swipe-dismiss-preview');if(dx>92){toggleJoin(index);showToast('Joining this event…');}else if(dx<-92)dismissHomePlan(card,index);});
+    card.addEventListener('pointercancel',()=>{dragging=false;card.style.transform='';card.classList.remove('swipe-join-preview','swipe-dismiss-preview');});
+  });
+}
+renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
