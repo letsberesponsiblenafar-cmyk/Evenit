@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.13",
+  "versionCode": 15,
+  "versionName": "1.14",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Navigation is fixed: Discover, Messages, Profile, and every sub-page now open cleanly without the Home board covering them."
+  "message": "Discover, Messages, Profile, and every sub-page now open cleanly without the Home board covering them."
 }

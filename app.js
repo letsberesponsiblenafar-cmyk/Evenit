@@ -1861,6 +1861,23 @@ document.querySelector('#post-form').onsubmit=async event=>{
   finally{button.disabled=false;button.innerHTML='Create plan <span>→</span>';}
 };
 
+// navigation.js starts before this file. Re-apply the address route after all
+// page handlers exist so a direct Discover/Profile/Messages link cannot leave
+// the Home board visible underneath it.
+function syncInitialPageFromAddress(){
+  const [route,tab]=decodeURIComponent(window.location.hash.replace(/^#/,'')).split('/');
+  const pages=new Set(['home','discover','groups','notifications','messages','profile','saved','settings']);
+  if(!pages.has(route)||route==='home')return;
+  setPage(route);
+  if(route==='profile'&&tab){
+    setTimeout(()=>{
+      const target=[...document.querySelectorAll('.profile-tabs button')].find(button=>button.textContent.trim().toLowerCase().includes(tab.toLowerCase()));
+      target?.click();
+    },0);
+  }
+}
+setTimeout(syncInitialPageFromAddress,0);
+
 setEvenitConnectionState(navigator.onLine);
 evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},20000);
 async function showNativeUpdatePrompt(){const capacitor=window.Capacitor;if(!capacitor?.isNativePlatform?.())return;try{const app=capacitor.Plugins?.App||capacitor.getPlugin?.('App');const info=await app?.getInfo?.();const current=Number(info?.build||0);const manifest=await fetch(`app-update.json?ts=${Date.now()}`,{cache:'no-store'}).then(response=>response.ok?response.json():null);if(!manifest||Number(manifest.versionCode)<=current)return;const banner=document.querySelector('#app-update-banner');if(!banner||sessionStorage.getItem(`evenit-update-dismissed-${manifest.versionCode}`))return;banner.querySelector('#app-update-message').textContent=manifest.message||'A new Evenit version is ready.';banner.querySelector('#app-update-link').href=manifest.apkUrl;banner.hidden=false;document.querySelector('#dismiss-app-update').onclick=()=>{sessionStorage.setItem(`evenit-update-dismissed-${manifest.versionCode}`,'true');banner.hidden=true}}catch(error){console.info('Update check unavailable',error)}}showNativeUpdatePrompt();
