@@ -1664,7 +1664,19 @@ function renderJoinQuestions(post,questions,button,afterRequest){
   pendingPlanRequest={postId:post.id,button,afterRequest};
   document.querySelector('#plan-questions-title').innerHTML=`Request a place at<br><em>${escapeHtml(post.title)}</em>`;
   document.querySelector('#plan-questions-copy').textContent='Answer the organizer’s questions, then send your interest request.';
-  planQuestionsFields.innerHTML=questions.map((question,index)=>`<label class="request-question"><span>${index+1}. ${escapeHtml(question.prompt)}${question.required?' <b>Required</b>':''}</span><textarea data-request-question="${escapeHtml(question.id)}" rows="2" maxlength="1000" ${question.required?'required':''} placeholder="Your answer"></textarea></label>`).join('');
+  planQuestionsFields.innerHTML=questions.map((question,index)=>{
+    const type=question.question_type||'short_text';
+    const options=Array.isArray(question.options)?question.options:[];
+    const required=question.required?'required':'';
+    const name=`request-${escapeHtml(question.id)}`;
+    const prompt=`<legend>${index+1}. ${escapeHtml(question.prompt)}${question.required?' <b>Required</b>':''}</legend>`;
+    let control='';
+    if(type==='long_text')control=`<textarea data-request-control rows="4" maxlength="1000" ${required} placeholder="Your answer"></textarea>`;
+    else if(type==='multiple_choice')control=`<div class="request-choice-list">${options.map(option=>`<label><input data-request-control type="radio" name="${name}" value="${escapeHtml(option)}" ${required}> <span>${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else if(type==='checkboxes')control=`<div class="request-choice-list">${options.map(option=>`<label><input data-request-control type="checkbox" value="${escapeHtml(option)}"> <span>${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else control=`<input data-request-control type="text" maxlength="1000" ${required} placeholder="Your answer">`;
+    return `<fieldset class="request-question" data-request-question="${escapeHtml(question.id)}" data-request-type="${escapeHtml(type)}">${prompt}${control}</fieldset>`;
+  }).join('');
   planQuestionsModal.classList.add('open');
 }
 
@@ -1709,7 +1721,15 @@ planQuestionsForm?.addEventListener('submit',async event=>{
   const pending=pendingPlanRequest;
   const post=posts.find(item=>item.id===pending.postId);
   if(!post){showToast('This event is no longer available.');return;}
-  const answers=[...planQuestionsFields.querySelectorAll('[data-request-question]')].map(field=>({question_id:field.dataset.requestQuestion,answer:field.value.trim()}));
+  const answers=[...planQuestionsFields.querySelectorAll('[data-request-question]')].map(field=>{
+    const type=field.dataset.requestType;
+    const controls=[...field.querySelectorAll('[data-request-control]')];
+    let answer='';
+    if(type==='checkboxes')answer=controls.filter(control=>control.checked).map(control=>control.value);
+    else if(type==='multiple_choice')answer=controls.find(control=>control.checked)?.value||'';
+    else answer=controls[0]?.value.trim()||'';
+    return{question_id:field.dataset.requestQuestion,answer};
+  });
   const submit=planQuestionsForm.querySelector('[type=submit]');
   submit.disabled=true;
   submit.textContent='Sending…';
@@ -1839,18 +1859,17 @@ document.querySelector('#post-form').onsubmit=async event=>{
     await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
     const startsAt=new Date(String(data.get('when')||''));
     if(Number.isNaN(startsAt.getTime()))throw new Error('Choose a valid date and time for the event.');
-    const capacityValue=String(data.get('capacity')||'').trim();
-    const capacity=capacityValue?Number(capacityValue):null;
-    if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1))throw new Error('Attendance limit must be a whole number greater than zero.');
-    const questions=[...form.querySelectorAll('[data-plan-question]')].map(field=>field.value.trim()).filter(Boolean);
+    const questions=typeof window.getPlanFormQuestions==='function'?window.getPlanFormQuestions():[];
     if(questions.length>10)throw new Error('You can add up to 10 guest questions.');
+    const invalidQuestion=questions.find(question=>!question.prompt||(['multiple_choice','checkboxes'].includes(question.type)&&question.options.length<2));
+    if(invalidQuestion)throw new Error('Choice questions need at least two answer options.');
     const latitudeValue=String(data.get('plan_latitude')||'').trim();
     const longitudeValue=String(data.get('plan_longitude')||'').trim();
     const latitude=latitudeValue?Number(latitudeValue):null;
     const longitude=longitudeValue?Number(longitudeValue):null;
     if((latitude===null)!==(longitude===null)||!Number.isFinite(latitude??0)||!Number.isFinite(longitude??0))throw new Error('The selected location is not valid.');
     button.disabled=true;button.textContent='Publishing…';
-    const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_with_questions',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_capacity:capacity,p_requires_college_verification:data.get('requires_college_verification')==='on',p_questions:questions,p_latitude:latitude,p_longitude:longitude}),15000,'Publishing timed out. Check your connection and try again.');
+    const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_with_question_form',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_requires_college_verification:data.get('requires_college_verification')==='on',p_questions:questions,p_latitude:latitude,p_longitude:longitude}),15000,'Publishing timed out. Check your connection and try again.');
     if(error)throw error;
     if(!planId)throw new Error('The event was not confirmed by the database.');
     modal.classList.remove('open');

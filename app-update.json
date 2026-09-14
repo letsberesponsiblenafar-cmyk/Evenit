@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "1.14",
+  "versionCode": 16,
+  "versionName": "1.15",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Discover, Messages, Profile, and every sub-page now open cleanly without the Home board covering them."
+  "message": "Create plans with a polished guest form: short and long answers, multiple choice, and checkboxes."
 }
