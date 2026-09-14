@@ -71,6 +71,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 
 @media(max-width:650px){.location-picker{display:grid;gap:7px}.location-picker small{padding:0}.plan-questions-heading{align-items:center}.plan-questions-heading small{max-width:210px}.approval-heading{align-items:flex-start;flex-direction:column}.approval-heading .publish-button{width:100%!important}.pass-candidate{padding:13px 14px}.host-approval-insights{padding-bottom:100px}}
 
+/* A page transition must remove the Home board from layout, even when older
+   component rules use display: flex/grid with !important. */
+body .feed-area > [hidden]{display:none!important}
+
 /* Android build access sits with Saved; the dock follows the requested order. */
 .saved-entry{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:7px;padding:10px 12px;border:0;border-radius:12px;background:var(--evenit-violet-soft);color:var(--evenit-violet);font:700 12px -apple-system,BlinkMacSystemFont,sans-serif;text-align:left;cursor:pointer}.saved-entry:hover{background:#e6e1ff}.settings-download{display:flex;align-items:center;gap:12px;width:100%;padding:16px;border:1px solid var(--evenit-line);border-radius:var(--evenit-radius);background:rgba(255,255,255,.9);box-shadow:var(--evenit-shadow);color:inherit;text-decoration:none}.settings-download>span:nth-child(2){flex:1}.settings-download strong,.settings-download small{display:block}.settings-download strong{font:600 13px var(--apple-font)}.settings-download small{margin-top:3px;color:var(--apple-muted);font-size:11px}.settings-download b{color:var(--apple-muted);font-size:22px;font-weight:400}
 @media(max-width:650px){.mobile-dock button{margin-top:0!important}.mobile-dock button small{font-size:9px!important;line-height:1!important}.mobile-dock button span{line-height:.8!important}}

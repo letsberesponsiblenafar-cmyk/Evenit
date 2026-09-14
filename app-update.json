@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.12",
+  "versionCode": 14,
+  "versionName": "1.13",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Create plans with guest questions and location choice, then approve each QR entry pass from Insights."
+  "message": "Navigation is fixed: Discover, Messages, Profile, and every sub-page now open cleanly without the Home board covering them."
 }

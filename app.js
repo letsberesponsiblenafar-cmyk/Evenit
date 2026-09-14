@@ -1605,7 +1605,9 @@ function renderHomeEventCards(){
   document.querySelectorAll('[data-home-join]').forEach(button=>button.addEventListener('click',()=>startHomeJoin(Number(button.dataset.homeJoin),button)));
   enhanceHomePlanCards();
 }
-renderPosts=function(){renderHomeEventCards();};
+// Never redraw the Home board while another page owns the content area.
+// This keeps live refreshes from visually overtaking Discover, Messages, or Profile.
+renderPosts=function(){if(!pageView?.hidden)return;renderHomeEventCards();};
 function enhanceHomePlanCards(){
   document.querySelectorAll('#posts .home-event-card').forEach(card=>{
     if(card.dataset.homeActionsReady)return;
