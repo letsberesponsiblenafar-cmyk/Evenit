@@ -104,6 +104,17 @@ function showJoinedPage(options={}){
   pageView.hidden=false;
   document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
   pageView.innerHTML='<div class="joined-page-loading">Loading your plans...</div>';
+  // Always fetch before drawing the Timeline. A join can happen while an
+  // earlier background refresh is still finishing, so an old in-memory list
+  // can briefly hide a newly-created request.
+  if(!options.skipRefresh&&supabase&&currentUser){
+    loadPlans().then(()=>{
+      if(!pageView.hidden&&pageView.querySelector('.joined-page-loading')){
+        showJoinedPage({...options,restore:true,skipRefresh:true});
+      }
+    });
+    return;
+  }
   const joined=getAgendaPlans();
   joined.sort((a,b)=>{
     const da=a.starts_at?new Date(a.starts_at):new Date(0);
@@ -1447,6 +1458,8 @@ if(supabase){
 }
 let evenitRefreshing=false;
 let evenitRefreshInterval=null;
+let evenitRefreshQueued=false;
+let evenitRefreshPromise=null;
 function setEvenitConnectionState(online,message){
   const control=document.querySelector('#connection-refresh');
   if(!control)return;
@@ -1455,21 +1468,38 @@ function setEvenitConnectionState(online,message){
   control.title=message|| (online===false?'You are offline. Reconnect to refresh.':'Live updates are connected');
   control.querySelector('span').textContent=online===false?'Offline':evenitRefreshing?'Syncing':'Live';
 }
-async function refreshEvenitLiveData({quiet=false}={}){
-  if(!supabase){setEvenitConnectionState(false,'Database connection is unavailable');return;}
-  if(!navigator.onLine){setEvenitConnectionState(false,'You are offline. Reconnect to refresh.');if(!quiet)showToast('You are offline — changes will refresh when you reconnect');return;}
-  if(evenitRefreshing)return;
-  evenitRefreshing=true;setEvenitConnectionState(true,'Refreshing your live data…');
-  try{
-    await Promise.all([loadPlans(),loadAftermathFeed()]);
-    const activePage=document.querySelector('[data-page].active')?.dataset.page;
-    if(activePage==='discover')await loadFollowingEvents();
-    if(activePage==='notifications')await renderNotifications();
-    if(activePage==='messages')await loadGroups();
-    setEvenitConnectionState(true,'Live updates are connected');
-    if(!quiet)showToast('Everything is up to date');
-  }catch(error){setEvenitConnectionState(false,'Could not reach the live database');if(!quiet)showToast('Could not refresh. Check your connection and try again.');}
-  finally{evenitRefreshing=false;setEvenitConnectionState(navigator.onLine);}
+function refreshEvenitLiveData({quiet=false}={}){
+  if(!supabase){setEvenitConnectionState(false,'Database connection is unavailable');return Promise.resolve();}
+  if(!navigator.onLine){setEvenitConnectionState(false,'You are offline. Reconnect to refresh.');if(!quiet)showToast('You are offline — changes will refresh when you reconnect');return Promise.resolve();}
+  // Never discard a refresh requested by a successful Join. A second pass is
+  // queued if a polling or realtime refresh is already in flight.
+  if(evenitRefreshing){evenitRefreshQueued=true;return evenitRefreshPromise||Promise.resolve();}
+  evenitRefreshing=true;
+  setEvenitConnectionState(true,'Refreshing your live data…');
+  const cycle=(async()=>{
+    try{
+      await Promise.all([loadPlans(),loadAftermathFeed()]);
+      const activePage=document.querySelector('[data-page].active')?.dataset.page;
+      if(activePage==='discover')await loadFollowingEvents();
+      if(activePage==='notifications')await renderNotifications();
+      if(activePage==='messages')await loadGroups();
+      setEvenitConnectionState(true,'Live updates are connected');
+      if(!quiet)showToast('Everything is up to date');
+    }catch(error){
+      setEvenitConnectionState(false,'Could not reach the live database');
+      if(!quiet)showToast('Could not refresh. Check your connection and try again.');
+    }finally{
+      evenitRefreshing=false;
+      setEvenitConnectionState(navigator.onLine);
+      if(evenitRefreshQueued){
+        evenitRefreshQueued=false;
+        await refreshEvenitLiveData({quiet:true});
+      }
+    }
+  })();
+  const promise=cycle.finally(()=>{if(evenitRefreshPromise===promise)evenitRefreshPromise=null;});
+  evenitRefreshPromise=promise;
+  return promise;
 }
 document.querySelector('#connection-refresh')?.addEventListener('click',()=>refreshEvenitLiveData());
 
@@ -1680,14 +1710,30 @@ function renderJoinQuestions(post,questions,button,afterRequest){
   planQuestionsModal.classList.add('open');
 }
 
+function reflectPlanInterest(post,row){
+  const target=posts.find(item=>item.id===post?.id)||post;
+  if(!target)return;
+  const status=row?.status||'interested';
+  target.membershipStatus=status;
+  target.joined=status==='confirmed';
+  target.interested=status==='interested';
+  if(Number.isFinite(Number(row?.confirmed_count)))target.joinedCount=Number(row.confirmed_count);
+  // Update every visible representation before the follow-up database refresh.
+  renderPulseBar();
+  if(pageView?.hidden&&typeof renderHomeEventCards==='function')renderHomeEventCards();
+}
+
 async function completePlanInterest(post,button,answers=null){
   if(button){button.disabled=true;button.textContent='Sending…';}
   try{
+    if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then try again.');
+    await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
     const result=answers===null
       ?await withEvenitTimeout(supabase.rpc('join_plan',{p_plan_id:post.id}),15000,'Your request took too long. Please try again.')
       :await withEvenitTimeout(supabase.rpc('submit_plan_join_request',{p_plan_id:post.id,p_answers:answers}),15000,'Your request took too long. Please try again.');
     if(result.error)throw result.error;
     const row=rpcRow(result.data);
+    reflectPlanInterest(post,row);
     await refreshEvenitLiveData({quiet:true});
     if(row?.status==='confirmed')showToast('You are confirmed — your entry pass is ready.');
     else showToast('Interest sent. The organizer will choose who receives an entry pass.');
@@ -1696,7 +1742,9 @@ async function completePlanInterest(post,button,answers=null){
     showToast(`Could not send your request: ${error?.message||'Please try again.'}`);
     return false;
   }finally{
-    if(button){button.disabled=false;button.textContent='Join';}
+    // A successful optimistic redraw replaces this element. Do not write
+    // "Join" back into a card whose request has already been accepted.
+    if(button&&button.isConnected&&!post.membershipStatus){button.disabled=false;button.textContent='Join';}
   }
 }
 
