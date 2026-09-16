@@ -1948,4 +1948,118 @@ setTimeout(syncInitialPageFromAddress,0);
 setEvenitConnectionState(navigator.onLine);
 evenitRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});},20000);
 async function showNativeUpdatePrompt(){const capacitor=window.Capacitor;if(!capacitor?.isNativePlatform?.())return;try{const app=capacitor.Plugins?.App||capacitor.getPlugin?.('App');const info=await app?.getInfo?.();const current=Number(info?.build||0);const manifest=await fetch(`app-update.json?ts=${Date.now()}`,{cache:'no-store'}).then(response=>response.ok?response.json():null);if(!manifest||Number(manifest.versionCode)<=current)return;const banner=document.querySelector('#app-update-banner');if(!banner||sessionStorage.getItem(`evenit-update-dismissed-${manifest.versionCode}`))return;banner.querySelector('#app-update-message').textContent=manifest.message||'A new Evenit version is ready.';banner.querySelector('#app-update-link').href=manifest.apkUrl;banner.hidden=false;document.querySelector('#dismiss-app-update').onclick=()=>{sessionStorage.setItem(`evenit-update-dismissed-${manifest.versionCode}`,'true');banner.hidden=true}}catch(error){console.info('Update check unavailable',error)}}showNativeUpdatePrompt();
+
+// Create Plan and Edit Profile are full application views, not overlays. The
+// existing forms are moved into the workspace so their validation, uploads,
+// and database behavior remain exactly the same.
+let activeWorkspace=null;
+const workspaceDefinitions={
+  plan:{surface:document.querySelector('#modal .composer-modal'),host:modal,destination:'home',label:'Create plan'},
+  profile:{surface:document.querySelector('#edit-modal .edit-modal'),host:editModal,destination:'profile',label:'Edit profile'}
+};
+document.querySelector('input[name="banner"]')?.closest('.upload-card')?.remove();
+
+function restoreWorkspaceSurface(kind){
+  const definition=workspaceDefinitions[kind];
+  if(!definition?.surface)return;
+  definition.host.append(definition.surface);
+  definition.host.classList.remove('open');
+  definition.surface.classList.remove('workspace-surface',`workspace-${kind}`);
+  definition.surface.setAttribute('role','dialog');
+  definition.surface.setAttribute('aria-modal','true');
+}
+
+function closeWorkspace({destination}={}){
+  const kind=activeWorkspace;
+  if(!kind)return;
+  const definition=workspaceDefinitions[kind];
+  restoreWorkspaceSurface(kind);
+  activeWorkspace=null;
+  document.body.classList.remove('workspace-open');
+  pageView.classList.remove('workspace-view');
+  setPage(destination||definition.destination);
+}
+
+function initializeProfileEditor(){
+  const meta=currentUser?.user_metadata||{};
+  editForm.full_name.value=meta.full_name||'';
+  editForm.username.value=meta.username||'';
+  editForm.email.value=currentUser?.email||'';
+  // The established loader also supplies private college data and visibility.
+  editModal.classList.add('open');
+  loadProfileDetails().finally(()=>editModal.classList.remove('open'));
+}
+
+function openWorkspace(kind,{restore=false}={}){
+  if(activeWorkspace===kind)return;
+  if(activeWorkspace)closeWorkspace();
+  const definition=workspaceDefinitions[kind];
+  if(!definition?.surface)return;
+  if(kind==='profile')initializeProfileEditor();
+  if(!restore)pushAppView({type:'workspace',kind});
+  activeWorkspace=kind;
+  definition.host.classList.remove('open');
+  homeElements.forEach(element=>element.hidden=true);
+  pageView.hidden=false;
+  pageView.className='page-view workspace-view';
+  document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
+  updateMobileHeader(kind==='profile'?'profile':'home');
+  document.body.classList.add('workspace-open');
+  pageView.innerHTML=`<section class="workspace-shell workspace-shell-${kind}"><header class="workspace-bar"><button class="workspace-cancel" type="button" data-workspace-cancel>Cancel</button><strong>${definition.label}</strong><span class="workspace-bar-spacer" aria-hidden="true"></span></header><div class="workspace-mount"></div></section>`;
+  definition.surface.classList.add('workspace-surface',`workspace-${kind}`);
+  definition.surface.removeAttribute('aria-modal');
+  definition.surface.removeAttribute('role');
+  pageView.querySelector('.workspace-mount').append(definition.surface);
+  pageView.querySelector('[data-workspace-cancel]')?.addEventListener('click',()=>{
+    if(window.history.state?.evenitAppView?.type==='workspace')window.history.back();
+    else closeWorkspace();
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+document.addEventListener('click',event=>{
+  const editTrigger=event.target.closest('.edit-profile');
+  const planTrigger=event.target.closest('#open-modal,#open-modal-header,#open-modal-mobile,[data-dock-create],.add-story,#profile-post,.topbar-plus');
+  if(!editTrigger&&!planTrigger)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  openWorkspace(editTrigger?'profile':'plan');
+},true);
+
+window.addEventListener('popstate',event=>{
+  const workspace=event.state?.evenitAppView;
+  if(workspace?.type==='workspace'){openWorkspace(workspace.kind,{restore:true});return;}
+  if(activeWorkspace)closeWorkspace();
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&activeWorkspace)closeWorkspace();});
+
+const establishedProfileSubmit=editForm.onsubmit;
+editForm.onsubmit=async event=>{
+  const establishedRenderProfile=renderProfile;
+  let saved=false;
+  renderProfile=()=>{saved=true;};
+  try{await establishedProfileSubmit(event);}finally{renderProfile=establishedRenderProfile;}
+  if(saved&&activeWorkspace==='profile')closeWorkspace({destination:'profile'});
+};
+const establishedPlanSubmit=document.querySelector('#post-form').onsubmit;
+document.querySelector('#post-form').onsubmit=async event=>{
+  const form=event.currentTarget;
+  const startedWithTitle=Boolean(form.elements.title?.value.trim());
+  await establishedPlanSubmit(event);
+  if(startedWithTitle&&activeWorkspace==='plan'&&!form.elements.title?.value)closeWorkspace({destination:'home'});
+};
+
+const establishedLoadProfileDetails=loadProfileDetails;
+loadProfileDetails=async function(){
+  await establishedLoadProfileDetails();
+  // The profile now has a deliberate visual identity instead of a banner image.
+  document.querySelector('.profile-cover')?.style.removeProperty('background-image');
+};
+const establishedProfileRenderer=renderProfile;
+renderProfile=function(){
+  establishedProfileRenderer();
+  if(activeWorkspace)return;
+  pageView.classList.add('profile-page-refined');
+  document.querySelector('.profile-cover')?.setAttribute('aria-hidden','true');
+};
 })();

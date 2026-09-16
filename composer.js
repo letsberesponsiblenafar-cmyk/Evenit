@@ -26,8 +26,8 @@
     if(preview.requests)preview.requests.textContent=count?`${count} ${count===1?'question':'questions'}`:'No questions';
   }
   function setComposerCopy(){
-    document.querySelector('.composer-header .overline').textContent='Evenit plan studio';
-    document.querySelector('.composer-intro').textContent='A calm place to set the scene, ask the right questions, and invite your people.';
+    document.querySelector('.composer-header .overline').textContent='Create plan';
+    document.querySelector('.composer-intro').textContent='Choose the essentials, then make it yours.';
     const stamp=document.querySelector('.composer-stamp');
     if(stamp)stamp.innerHTML='<span>EVENIT</span><strong>MAKE<br>IT HAPPEN</strong><small>Every good plan<br>starts here</small>';
     const steps=document.querySelector('.composer-steps');
@@ -48,14 +48,14 @@
     const existingQuestions=entry.querySelector('.plan-questions');
     const questionSection=document.createElement('fieldset');
     questionSection.className='composer-section composer-question-section';
-    questionSection.innerHTML='<legend><b>02</b> Questions for guests</legend><p class="composer-section-copy">Optional. Build a short request form before guests show interest. Choose a response type for every question.</p>';
+    questionSection.innerHTML='<legend><b>02</b> Questions for guests</legend><p class="composer-section-copy">Optional — add only what you need.</p>';
     existingQuestions?.remove();
     questionSection.append(existingQuestions||document.createElement('div'));
     const panel=questionSection.querySelector('.plan-questions');
-    if(panel)panel.innerHTML='<div class="plan-questions-heading"><div><strong>Guest request form</strong><small>Add up to 10 thoughtful questions — like Google Forms, but made for your plan.</small></div><button id="add-plan-question" type="button">＋ Add question</button></div><div id="plan-question-list" aria-live="polite"></div><div class="plan-question-empty" id="plan-question-empty"><span>✦</span><p>No questions yet. Add one if you need a little more context before approving guests.</p></div>';
+    if(panel)panel.innerHTML='<div class="plan-questions-heading"><div><strong>Guest questions</strong><small>Optional</small></div><button id="add-plan-question" type="button">＋ Add question</button></div><div id="plan-question-list" aria-live="polite"></div><div class="plan-question-empty" id="plan-question-empty"><span>＋</span><p>Add a question when you need one.</p></div>';
     const intro=document.createElement('p');
     intro.className='composer-section-copy';
-    intro.textContent='People first send an interest request. You choose who receives a QR entry pass in Insights.';
+    intro.textContent='Approve guests and issue entry passes from Insights.';
     entry.insertBefore(intro,entry.querySelector('.verification-choice'));
     scene.before(questionSection);
   }
@@ -86,13 +86,13 @@
     const holder=row.querySelector('.question-options-editor');holder.replaceChildren();
     if(!['multiple_choice','checkboxes'].includes(type)){holder.hidden=true;return;}
     holder.hidden=false;
-    holder.innerHTML=`<p>${type==='multiple_choice'?'Guests choose one option.':'Guests can choose more than one option.'}</p><div data-question-options></div><button type="button" class="add-question-option">＋ Add option</button>`;
+    holder.innerHTML=`<p>${type==='multiple_choice'?'Choose one':'Choose any that apply'}</p><div data-question-options></div><button type="button" class="add-question-option">＋ Add option</button>`;
     (initialOptions.length?initialOptions:['Option 1','Option 2']).forEach(option=>addOption(row,option));
   }
   function addQuestionRow(question={}){
     if(!questionList||questionRows().length>=10)return;
     const row=document.createElement('article');row.className='plan-question-row';
-    row.innerHTML='<div class="question-row-top"><span class="question-number">01</span><label class="question-prompt"><span class="sr-only">Question prompt</span><input data-plan-question type="text" maxlength="280" placeholder="Ask your guests a question"></label><label class="question-type"><span class="sr-only">Answer type</span><select data-plan-question-type><option value="short_text">Short answer</option><option value="long_text">Long answer</option><option value="multiple_choice">Multiple choice</option><option value="checkboxes">Checkboxes</option></select></label></div><div class="question-options-editor" hidden></div><div class="question-row-footer"><label class="question-required"><input data-plan-question-required type="checkbox" checked><span>Required</span></label><button type="button" class="remove-plan-question" aria-label="Remove question">Remove</button></div>';
+    row.innerHTML='<div class="question-row-top"><span class="question-number">01</span><label class="question-prompt"><span class="sr-only">Question prompt</span><input data-plan-question type="text" maxlength="280" placeholder="Ask a question"></label><label class="question-type"><span class="sr-only">Answer type</span><select data-plan-question-type><option value="short_text">Short answer</option><option value="long_text">Long answer</option><option value="multiple_choice">Multiple choice</option><option value="checkboxes">Checkboxes</option></select></label></div><div class="question-options-editor" hidden></div><div class="question-row-footer"><label class="question-required"><input data-plan-question-required type="checkbox" checked><span>Required</span></label><button type="button" class="remove-plan-question" aria-label="Remove this question">Remove</button></div>';
     const prompt=row.querySelector('[data-plan-question]');const type=row.querySelector('[data-plan-question-type]');
     prompt.value=question.prompt||'';type.value=questionTypes[question.type]?question.type:'short_text';row.querySelector('[data-plan-question-required]').checked=question.required!==false;
     type.addEventListener('change',()=>{renderOptions(row);updateQuestionControls();});prompt.addEventListener('input',updatePreview);
