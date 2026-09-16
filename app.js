@@ -355,7 +355,6 @@ function renderAftermathCards(items){
       +'<div class="aftermath-actions">'
       +'<button class="aftermath-action '+(post.liked?'liked':'')+'" data-aftermath-like="'+escapeHtml(post.id)+'"><span class="action-icon">'+(post.liked?'\u2665':'\u2661')+'</span><span class="action-label">'+(post.liked?'Liked':'Like')+'</span></button>'
       +'<button class="aftermath-action" data-aftermath-comment="'+escapeHtml(post.id)+'"><span class="action-icon">\uD83D\uDCAC</span><span class="action-label">Comment</span></button>'
-      +'<button class="aftermath-action" data-aftermath-share="'+escapeHtml(post.id)+'"><span class="action-icon">\u2197</span><span class="action-label">Share</span></button>'
       +'<button class="aftermath-action save" data-aftermath-save="'+escapeHtml(post.id)+'"><span class="action-icon">\u25C7</span></button>'
       +'</div></article>';
   }).join('');
@@ -398,11 +397,6 @@ function wireAftermathActions(){
       const mp=new Map((profs||[]).map(p=>[p.id,p]));
       list.innerHTML=data.map(c=>{const p=mp.get(c.user_id)||{};return '<div class="comment-item"><img src="'+escapeHtml(p.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><div class="comment-header"><strong>'+escapeHtml(p.full_name||p.username||'Member')+'</strong><small>'+formatPostTime(c.created_at)+'</small></div><div class="comment-body">'+escapeHtml(c.body)+'</div></div></div>';}).join('');
     });
-  });
-  document.querySelectorAll('[data-aftermath-share]').forEach(b=>b.onclick=()=>{
-    const url=location.origin+location.pathname+'#aftermath-'+b.dataset.aftermathShare;
-    document.querySelector('#share-url').textContent=url;
-    document.querySelector('#share-sheet')?.classList.add('open');
   });
   document.querySelectorAll('[data-aftermath-save]').forEach(b=>b.onclick=()=>{
     b.classList.toggle('saved');try{navigator.vibrate?.(12);}catch{}
@@ -1459,6 +1453,9 @@ function scheduleEvenitLiveRefresh(kind){
   evenitLiveRefreshTimer=setTimeout(()=>{
     const activePage=document.querySelector('[data-page].active')?.dataset.page;
     if(kind==='plans'){loadPlans();if(activePage==='discover')renderDiscover();}
+    if(kind==='insights'&&activeInsightsPlanId&&pageView?.querySelector('.host-approval-insights')){
+      renderInsights(activeInsightsPlanId);
+    }
     if(kind==='aftermath'&&pageView.hidden)loadAftermathFeed();
     if(kind==='notifications'&&activePage==='notifications')renderNotifications();
     if(kind==='messages'){
@@ -1474,6 +1471,11 @@ function subscribeToEvenitLiveUpdates(){
   evenitLiveChannel=supabase.channel('evenit-live-'+currentUser.id)
     .on('postgres_changes',{event:'*',schema:'public',table:'plans'},()=>scheduleEvenitLiveRefresh('plans'))
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_members',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'plan_members'},payload=>{
+      const membership=payload.new?.plan_id?payload.new:payload.old;
+      const hostedPlan=posts.find(plan=>plan.id===membership?.plan_id&&plan.user_id===currentUser.id);
+      if(hostedPlan)scheduleEvenitLiveRefresh('insights');
+    })
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_entry_passes',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_swipes',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_verification_access',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
@@ -1755,6 +1757,20 @@ function reflectPlanInterest(post,row){
   if(pageView?.hidden&&typeof renderHomeEventCards==='function')renderHomeEventCards();
 }
 
+async function confirmPlanInterestStored(planId,userId){
+  const {data,error}=await supabase
+    .from('plan_members')
+    .select('status,queue_position,confirmed_at')
+    .eq('plan_id',planId)
+    .eq('user_id',userId)
+    .maybeSingle();
+  if(error)throw error;
+  if(!data||!['interested','waitlisted','confirmed'].includes(data.status)){
+    throw new Error('The request was not recorded. Please send it again.');
+  }
+  return data;
+}
+
 async function completePlanInterest(post,button,answers=null){
   if(button){button.disabled=true;button.textContent='Sending…';}
   try{
@@ -1764,7 +1780,16 @@ async function completePlanInterest(post,button,answers=null){
       ?await withEvenitTimeout(supabase.rpc('join_plan',{p_plan_id:post.id}),15000,'Your request took too long. Please try again.')
       :await withEvenitTimeout(supabase.rpc('submit_plan_join_request',{p_plan_id:post.id,p_answers:answers}),15000,'Your request took too long. Please try again.');
     if(result.error)throw result.error;
-    const row=rpcRow(result.data);
+    const resultRow=rpcRow(result.data);
+    // Do not show a successful request until the membership row is actually
+    // visible in Supabase. This prevents a false success for the guest while
+    // the organizer has nothing to review in Insights.
+    const storedMembership=await withEvenitTimeout(
+      confirmPlanInterestStored(post.id,currentUser.id),
+      8000,
+      'We could not confirm that your request was saved. Please try again.'
+    );
+    const row={...(resultRow||{}),...storedMembership};
     reflectPlanInterest(post,row);
     await refreshEvenitLiveData({quiet:true});
     if(row?.status==='confirmed')showToast('You are confirmed — your entry pass is ready.');
@@ -1934,6 +1959,58 @@ renderInsights=async function(planId){
     const button=event.currentTarget;
     button.disabled=true;button.textContent=`Sending ${selected.length}…`;
     let issued=0;const failures=[];
+    for(const userId of selected){
+      const result=await supabase.rpc('issue_plan_entry_pass',{p_plan_id:planId,p_user_id:userId});
+      if(result.error)failures.push(result.error.message);else issued++;
+    }
+    await refreshEvenitLiveData({quiet:true});
+    await renderInsights(planId);
+    showToast(issued?`${issued} ${issued===1?'entry pass':'entry passes'} sent.${failures.length?' Some requests could not be approved.':''}`:failures[0]||'No passes were sent.');
+  });
+};
+
+// Host approvals are a dedicated review workspace. The assignment below is
+// intentionally the final Insights renderer used by every host entry point.
+renderInsights=async function(planId){
+  const post=posts.find(item=>item.id===planId);
+  if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return;}
+  activeInsightsPlanId=planId;
+  showInsightsShell();
+  pageView.innerHTML='<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Loading requests...</h2></div>';
+  const {data,error}=await supabase.rpc('get_plan_insights',{p_plan_id:planId});
+  if(error){
+    pageView.innerHTML=`<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(error.message)}</p></div>`;
+    return;
+  }
+  const info=typeof data==='string'?JSON.parse(data):data;
+  const plan=info?.plan||post;
+  const metrics=info?.metrics||{};
+  const attendees=Array.isArray(info?.attendees)?info.attendees:[];
+  const interested=attendees.filter(item=>item.status==='interested'||item.status==='waitlisted');
+  const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);
+  const attended=attendees.filter(item=>item.attended);
+  const passesIssued=confirmed.length+attended.length;
+  const answerList=item=>Array.isArray(item.answers)&&item.answers.length
+    ?`<dl class="request-answers">${item.answers.map(answer=>`<div><dt>${escapeHtml(answer.question||'Question')}</dt><dd>${escapeHtml(answer.answer||'—')}</dd></div>`).join('')}</dl>`
+    :'<p class="request-answer-empty">No additional answers for this request.</p>';
+  const person=item=>`<button class="attendee-card ${item.attended?'is-attended':''}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small></span><b>${item.attended?'Attended ✓':'Pass sent'}</b></button>`;
+  const candidate=item=>`<label class="pass-candidate"><input type="checkbox" data-pass-candidate value="${escapeHtml(item.id)}"><span class="pass-candidate-avatar"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""></span><span class="pass-candidate-main"><span class="pass-candidate-title"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><em>${item.status==='waitlisted'?'Waitlisted':'New request'}</em></span><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small>${answerList(item)}</span></label>`;
+  pageView.innerHTML=`<div class="insights-page host-approval-insights"><header class="insights-hero"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div><span class="insights-live-state"><i></i>Live</span></header><div class="insights-metrics"><div class="insights-metric primary"><strong>${interested.length}</strong><span>To review</span></div><div class="insights-metric"><strong>${passesIssued}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Checked in</span></div><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reach</span></div></div><section class="insights-section pass-approval-section"><div class="approval-heading"><div><p class="approval-eyebrow">Requests</p><h3>People waiting for a pass</h3><p>Review their answers, select the people you approve, then send their QR passes.</p></div><div class="approval-actions"><span id="pass-selection-count" aria-live="polite">Select requests</span><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty"><strong>No requests yet</strong><span>New interest requests will appear here automatically.</span></div>'}</div></section><section class="insights-utility"><div><strong>Door check-in</strong><span>Scan a guest’s QR only when they arrive.</span></div><button class="scan-button" id="open-scan">Scan pass <span>↗</span></button></section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Issued</p><h3>Pass holders</h3></div><span>${confirmed.length}</span></div>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty"><strong>No passes sent</strong><span>Approved guests will appear here.</span></div>'}</section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Attendance</p><h3>Checked in</h3></div><span>${attended.length}</span></div>${attended.length?attended.map(person).join(''):'<div class="insights-empty"><strong>No one checked in yet</strong><span>Use Scan pass at the door to record attendance.</span></div>'}</section></div>`;
+  pageView.querySelector('#open-scan')?.addEventListener('click',()=>openScanModal(planId));
+  const updatePassSelection=()=>{
+    const total=pageView.querySelectorAll('[data-pass-candidate]:checked').length;
+    const label=pageView.querySelector('#pass-selection-count');
+    if(label)label.textContent=total?`${total} selected`:'Select requests';
+  };
+  pageView.querySelectorAll('[data-pass-candidate]').forEach(input=>input.addEventListener('change',updatePassSelection));
+  pageView.querySelector('#issue-selected-passes')?.addEventListener('click',async event=>{
+    const selected=[...pageView.querySelectorAll('[data-pass-candidate]:checked')].map(input=>input.value);
+    if(!selected.length){showToast('Select at least one request first.');return;}
+    const button=event.currentTarget;
+    button.disabled=true;
+    button.textContent=`Sending ${selected.length}…`;
+    let issued=0;
+    const failures=[];
     for(const userId of selected){
       const result=await supabase.rpc('issue_plan_entry_pass',{p_plan_id:planId,p_user_id:userId});
       if(result.error)failures.push(result.error.message);else issued++;
