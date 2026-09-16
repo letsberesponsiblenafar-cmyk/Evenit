@@ -550,7 +550,23 @@ const pageTemplates={
   messages:`<div class="page-header message-header"><div><p class="overline">Keep the plan moving</p><h2>Messages</h2><p>Conversations and private circles, in one calm place.</p></div><button class="message-compose" type="button" title="New message" aria-label="Start a new conversation">✎ <span>New</span></button></div><div class="message-availability"><span class="online-dot"></span><strong>Your circles are up to date</strong><small>Replies, group notes, and event chats live here.</small></div><div class="msg-toggle" role="tablist"><button class="msg-tab active" data-msg-tab="primary">Primary <small>2</small></button><button class="msg-tab" data-msg-tab="groups">Groups</button></div><div id="msg-primary-pane" class="msg-pane"><div class="message-list"><button class="message"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose <span class="message-presence"></span></strong><p>Should we bring extra blankets for the picnic?</p></div><small>2m</small></button><button class="message"><img src="https://i.pravatar.cc/100?img=47" alt=""><div><strong>ari.makes</strong><p>That coffee walk sounds perfect.</p></div><small>1h</small></button></div><div class="message-note"><span>✦</span><div><strong>Keep good plans close</strong><p>Join a plan to start a new conversation.</p></div></div></div><div id="msg-groups-pane" class="msg-pane" hidden><div class="groups-heading"><div><h3>Groups</h3><p>Private circles for members only.</p></div><button class="publish-button" id="open-group-create">＋ Create</button></div><div id="groups-list" class="groups-list"></div></div>`,
   settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2><p class="settings-intro">Control the parts of Evenit that matter to you.</p></div><div class="settings-list"><button data-settings-panel="account"><span class="settings-icon">◎</span><span><strong>Account details</strong><small>Name, username, profile and email</small></span><b>›</b></button><button data-settings-panel="notifications"><span class="settings-icon">♡</span><span><strong>Notification preferences</strong><small>Choose what reaches you</small></span><b>›</b></button><button data-settings-panel="privacy"><span class="settings-icon">◌</span><span><strong>Privacy and safety</strong><small>Profile visibility and location</small></span><b>›</b></button><a class="settings-download" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span class="settings-icon">↓</span><span><strong>Download Android app</strong><small>Install the latest Evenit APK</small></span><b>›</b></a><button data-settings-panel="help"><span class="settings-icon">?</span><span><strong>Help center</strong><small>Answers and support</small></span><b>›</b></button></div>`,
 };
-  function renderProfile(){const loggedIn=Boolean(currentUser);const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';const username=currentUser?.user_metadata?.username||'create your username';pageView.innerHTML=`<div class="profile-cover"><span class="profile-cover-glow"></span></div><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div>${loggedIn?'<button class="edit-profile">Edit profile <span>↗</span></button>':''}</div><p class="profile-about-own" hidden></p><div class="profile-stats"><span><strong>${posts.filter(post=>post.user_id===currentUser?.id).length}</strong> plans posted</span><span><strong>${posts.filter(post=>post.joined).length}</strong> joined</span><span><strong>0</strong> followers</span></div><div class="profile-tabs"><button class="active">Your plans</button><button>Lived On</button></div><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div>`;if(loggedIn)document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');else{document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open')}renderProfileTab(document.querySelector('.profile-tabs button'));loadProfileDetails();applyAdminContent();applyAdminStyles()}
+  function renderProfile(){
+    const loggedIn=Boolean(currentUser);
+    const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';
+    const username=currentUser?.user_metadata?.username||'your.profile';
+    const createdEvents=posts.filter(post=>post.user_id===currentUser?.id).length;
+    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${loggedIn?'@'+escapeHtml(username):'Your profile'}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open saved items"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" hidden><h3>About</h3><p class="profile-about-own" hidden></p></section>${loggedIn?'<div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div></div></section>`;
+    if(loggedIn){
+      document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');
+      loadOwnProfileFollowStats();
+    }else{
+      document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');
+      document.querySelector('#profile-login').onclick=()=>loginModal.classList.add('open');
+    }
+    renderProfileTab(document.querySelector('[data-profile-tab="plans"]'));
+    loadProfileDetails();
+    applyAdminContent();applyAdminStyles();
+  }
   function renderDiscover(){
   pageView.innerHTML=`<div class="page-header discover-header"><div><p class="overline">Made for you</p><h2>Discover<br><em>events.</em></h2><p>Interest matches first, then a little room for something unexpected.</p></div><button class="discover-swipe-launch" id="open-swipe-discover" type="button"><span>✦</span> Swipe events</button></div><div class="discover-welcome"><span class="discover-welcome-icon">⌕</span><div><strong>All upcoming events, ranked for you.</strong><small>Swipe separately to tune what Evenit recommends next.</small></div></div><div id="following-events" class="following-feed"></div><div class="discover-swipe-overlay" id="discover-swipe-overlay" hidden><section id="discover-swipe-section" class="discover-swipe-section" role="dialog" aria-modal="true" aria-label="Swipe events"><div class="discover-swipe-heading"><div><p class="overline">Something new</p><h3>Swipe to choose.</h3><small>Right means interested. Left means show me less like this.</small></div><button type="button" id="close-swipe-discover" aria-label="Close swipe events">×</button></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div></section></div>`;
   loadFollowingEvents();
@@ -843,7 +859,7 @@ setPage=function(page){
 function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();
 if(key.includes('lived')){ renderLivedOn(content); return; }
 const items=key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);
-if(!items.length){content.innerHTML=`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key==='your plans'?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>' :''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');return}
+if(!items.length){content.innerHTML=`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key.includes('plans')?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>' :''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');return}
 content.innerHTML=items.map(post=>{const owner=post.user_id===currentUser?.id;const attendedBadge=post.entryPass?.checked_in_at?' \u00b7 Attended \u2713':'';return`<button class="profile-event ${post.entryPass?.checked_in_at?'is-attended':''}" ${owner?`data-insights-id="${escapeHtml(post.id)}"`:''}><span>\u2726</span><div><strong>${escapeHtml(post.title)}</strong><small>${escapeHtml(post.location)} \u00b7 ${post.joinedCount||0}${post.capacity?`/${post.capacity}`:''} joined${attendedBadge}</small></div>${owner?'<b>Insights \u2197</b>':''}</button>`}).join('');
 const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');
 }
@@ -1935,6 +1951,8 @@ function syncInitialPageFromAddress(){
   const [route,tab]=decodeURIComponent(window.location.hash.replace(/^#/,'')).split('/');
   const pages=new Set(['home','discover','groups','notifications','messages','profile','saved','settings']);
   if(!pages.has(route)||route==='home')return;
+  const sharedProfileId=new URLSearchParams(window.location.search).get('profile');
+  if(route==='profile'&&sharedProfileId){setPage('profile');setTimeout(()=>renderPublicProfile(sharedProfileId),0);return;}
   setPage(route);
   if(route==='profile'&&tab){
     setTimeout(()=>{
@@ -2038,7 +2056,7 @@ editForm.onsubmit=async event=>{
   const establishedRenderProfile=renderProfile;
   let saved=false;
   renderProfile=()=>{saved=true;};
-  try{await establishedProfileSubmit(event);}finally{renderProfile=establishedRenderProfile;}
+  try{await establishedProfileSubmit(event);}finally{renderProfile=establishedRenderProfile;editForm.querySelector('[type="submit"]').textContent='Save changes';}
   if(saved&&activeWorkspace==='profile')closeWorkspace({destination:'profile'});
 };
 const establishedPlanSubmit=document.querySelector('#post-form').onsubmit;
@@ -2052,14 +2070,73 @@ document.querySelector('#post-form').onsubmit=async event=>{
 const establishedLoadProfileDetails=loadProfileDetails;
 loadProfileDetails=async function(){
   await establishedLoadProfileDetails();
-  // The profile now has a deliberate visual identity instead of a banner image.
-  document.querySelector('.profile-cover')?.style.removeProperty('background-image');
+  const about=document.querySelector('.profile-about-own');
+  const aboutSection=document.querySelector('.profile-about-section');
+  if(aboutSection)aboutSection.hidden=!about?.textContent.trim();
 };
 const establishedProfileRenderer=renderProfile;
 renderProfile=function(){
   establishedProfileRenderer();
   if(activeWorkspace)return;
   pageView.classList.add('profile-page-refined');
-  document.querySelector('.profile-cover')?.setAttribute('aria-hidden','true');
+  wirePremiumProfileInteractions();
 };
+
+async function loadOwnProfileFollowStats(){
+  const profileId=currentUser?.id;
+  if(!supabase||!profileId)return;
+  const [followers,following]=await Promise.all([
+    supabase.from('user_follows').select('*',{count:'exact',head:true}).eq('following_id',profileId),
+    supabase.from('user_follows').select('*',{count:'exact',head:true}).eq('follower_id',profileId)
+  ]);
+  if(currentUser?.id!==profileId)return;
+  if(!followers.error){const count=document.querySelector('#profile-followers-count');if(count)count.textContent=String(followers.count||0);}
+  if(!following.error){const count=document.querySelector('#profile-following-count');if(count)count.textContent=String(following.count||0);}
+}
+
+function activatePremiumProfileTab(view,{motion=false}={}){
+  const tab=document.querySelector(`.profile-tabs [data-profile-tab="${view}"]`);
+  if(!tab)return;
+  document.querySelectorAll('.profile-tabs [data-profile-tab]').forEach(button=>{
+    const active=button===tab;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',String(active));
+  });
+  const stage=document.querySelector('.profile-tab-stage');
+  if(motion&&stage){stage.classList.remove('is-switching');requestAnimationFrame(()=>stage.classList.add('is-switching'));}
+  renderProfileTab(tab);
+}
+
+async function shareCurrentProfile(){
+  if(!currentUser?.id)return;
+  const url=`${window.location.origin}${window.location.pathname}?profile=${encodeURIComponent(currentUser.id)}#profile`;
+  const title=`${currentUser.user_metadata?.full_name||'My'} Evenit profile`;
+  try{
+    if(navigator.share){await navigator.share({title,text:'Find my plans and updates on Evenit.',url});return;}
+    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);showToast('Profile link copied');return;}
+    showToast('Profile link is ready to share');
+  }catch(error){if(error?.name!=='AbortError')showToast('Could not open sharing. Please try again.');}
+}
+
+function wirePremiumProfileInteractions(){
+  const profile=document.querySelector('.profile-instagram');
+  if(!profile)return;
+  document.querySelector('#profile-menu')?.addEventListener('click',event=>{
+    event.preventDefault();event.stopPropagation();activeSavedCollection='plans';setPage('saved');
+  });
+  document.querySelector('#share-profile')?.addEventListener('click',shareCurrentProfile);
+  document.querySelectorAll('.profile-tabs [data-profile-tab]').forEach(tab=>{
+    tab.onclick=event=>{event.preventDefault();event.stopPropagation();activatePremiumProfileTab(tab.dataset.profileTab,{motion:true});};
+  });
+  const stage=profile.querySelector('.profile-tab-stage');
+  if(!stage)return;
+  let startX=0,startY=0;
+  stage.onpointerdown=event=>{startX=event.clientX;startY=event.clientY;};
+  stage.onpointerup=event=>{
+    const dx=event.clientX-startX;
+    const dy=event.clientY-startY;
+    if(Math.abs(dx)<48||Math.abs(dx)<Math.abs(dy))return;
+    activatePremiumProfileTab(dx<0?'lived':'plans',{motion:true});
+  };
+}
 })();
