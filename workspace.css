@@ -1,7 +1,7 @@
 /* Dedicated creation and profile-edit workspaces. */
 /* Keep a focused, edge-to-edge mobile workspace while a form is open. */
 .workspace-profile .media-upload{grid-template-columns:1fr!important}
-@media(max-width:700px){.workspace-open .mobile-header{display:none!important}}
+@media(max-width:700px){.workspace-open .mobile-header,.workspace-open .mobile-dock{display:none!important}body.workspace-open .workspace-plan .question-row-footer{margin-left:0!important}}
 
 /* The legacy question panel supplied a two-column grid to every question.
    Reset it inside the workspace so the answer field and footer remain inside
