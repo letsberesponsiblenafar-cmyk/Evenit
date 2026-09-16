@@ -331,6 +331,7 @@ async function getRankedDiscoverPlans({forSwipe=false}={}){
 function renderAftermathCards(items){
   return items.map(post=>{
     const tags=(post.hashtags||[]).map(h=>'<span class="aftermath-tag">#'+escapeHtml(h)+'</span>').join(' ');
+    const authorLabel=post.username?'@'+post.username:(post.full_name||'Evenit member');
     const mediaHtml=(post.media||[]).map(m=>{
       if(m.file_type==='image') return '<div class="aftermath-media-item image"><img src="'+escapeHtml(m.file_url)+'" alt="Photo" loading="lazy"></div>';
       if(m.file_type==='video') return '<div class="aftermath-media-item video"><video src="'+escapeHtml(m.file_url)+'" controls preload="none"></video></div>';
@@ -339,14 +340,11 @@ function renderAftermathCards(items){
     }).join('');
     const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
     return '<article class="aftermath-card" data-aftermath-id="'+escapeHtml(post.id)+'">'
-      +'<div class="aftermath-header" data-public-profile-id="'+escapeHtml(post.author_id)+'"><img class="aftermath-avatar" src="'+escapeHtml(post.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt="">'
-      +'<div class="aftermath-author"><div class="aftermath-name">'+escapeHtml(post.full_name||post.username||'Evenit member')+'</div>'
-      +'<div class="aftermath-handle">'+escapeHtml(post.username?'@'+post.username:'')+'</div></div>'
-      +'<div class="aftermath-time">'+formatPostTime(post.created_at)+'</div></div>'
-      +'<div class="aftermath-event-context"><div class="aftermath-event-badge">LIVED</div>'
-      +'<div class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'')+'</span>'
+      +'<button class="aftermath-author-line" type="button" data-public-profile-id="'+escapeHtml(post.author_id)+'">'+escapeHtml(authorLabel)+'</button>'
+      +'<button class="aftermath-event-context" type="button" data-aftermath-event="'+escapeHtml(post.plan_id||'')+'" data-event-title="'+escapeHtml(post.plan_title||'')+'" data-event-location="'+escapeHtml(post.plan_location||'')+'"><span class="aftermath-event-badge">Lived</span>'
+      +'<span class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'Event details')+'</span>'
       +(post.plan_location?'<span class="aftermath-event-loc">\uD83D\uDCCD '+escapeHtml(post.plan_location)+'</span>':'')
-      +'</div></div>'
+      +'</span><span class="aftermath-event-arrow" aria-hidden="true">›</span></button>'
       +'<div class="aftermath-body">'+escapeHtml(post.body)+'</div>'
       +(tags?'<div class="aftermath-tags">'+tags+'</div>':'')
       +(mediaHtml?'<div class="aftermath-media '+gridClass+'">'+mediaHtml+'</div>':'')
@@ -555,7 +553,7 @@ const pageTemplates={
     const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';
     const username=currentUser?.user_metadata?.username||'your.profile';
     const createdEvents=posts.filter(post=>post.user_id===currentUser?.id).length;
-    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${loggedIn?'@'+escapeHtml(username):'Your profile'}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open saved items"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" hidden><h3>About</h3><p class="profile-about-own" hidden></p></section>${loggedIn?'<div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div></div></section>`;
+    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${loggedIn?'@'+escapeHtml(username):'Your profile'}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open profile menu" aria-expanded="false"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" hidden><h3>About</h3><p class="profile-about-own" hidden></p></section>${loggedIn?'<div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div></div></section>`;
     if(loggedIn){
       document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');
       loadOwnProfileFollowStats();
@@ -605,7 +603,6 @@ renderProfile=function(){
   const cover=document.querySelector('.profile-cover');
   const handle=document.querySelector('.profile-handle')?.textContent||'@profile';
   if(cover&&!document.querySelector('.profile-sketch-topbar'))cover.insertAdjacentHTML('beforebegin',`<div class="profile-sketch-topbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${escapeHtml(handle)}</strong><button id="profile-menu" class="profile-menu" type="button" aria-label="Open profile options"><i></i><i></i><i></i></button></div>`);
-  document.querySelector('#profile-menu')?.addEventListener('click',()=>{activeSavedCollection='plans';setPage('saved');});
   document.querySelector('.topbar-plus')?.addEventListener('click',()=>modal.classList.add('open'));
 };
 let swipeStack=[];
@@ -1352,8 +1349,10 @@ async function renderLivedOn(container){
     }
   }
   allPosts.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const livedAuthor=currentUser.user_metadata?.username?`@${currentUser.user_metadata.username}`:(currentUser.user_metadata?.full_name||'You');
   if(!allPosts.length){
-    container.innerHTML=`<div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>Your aftermath starts here</h3><p>Only stories you share from events you attended appear on your profile.</p><div class="lived-events-list">${data.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">Share</button></div>`).join('')}</div></div>`;
+    container.innerHTML=`<div class="lived-header"><div><p class="lived-label">Your stories</p><p class="lived-sub">Share the moments that stayed with you.</p></div><button class="lived-share-button" type="button" data-lived-share>Share a lived event</button></div><div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>Your aftermath starts here</h3><p>Only stories you share from events you attended appear on your profile.</p><div class="lived-events-list">${data.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">Share</button></div>`).join('')}</div></div>`;
+    container.querySelector('[data-lived-share]')?.addEventListener('click',()=>openAftermathPlanPicker(data));
     container.querySelectorAll('[data-lived-add]').forEach(el=>{
       el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
     });
@@ -1369,13 +1368,14 @@ async function renderLivedOn(container){
     }).join('');
     const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
     return`<article class="aftermath-card lived-card" data-aftermath-id="${escapeHtml(post.id)}">
-      <div class="aftermath-event-context">
-        <div class="aftermath-event-badge lived">LIVED</div>
-        <div class="aftermath-event-info">
+      <button class="aftermath-author-line" type="button" data-public-profile-id="${escapeHtml(currentUser.id)}">${escapeHtml(livedAuthor)}</button>
+      <button class="aftermath-event-context" type="button" data-aftermath-event="${escapeHtml(post.plan_id||'')}" data-event-title="${escapeHtml(post.plan_title||'')}" data-event-location="${escapeHtml(post.plan_location||'')}">
+        <span class="aftermath-event-badge lived">Lived</span>
+        <span class="aftermath-event-info">
           <span class="aftermath-event-title">${escapeHtml(post.plan_title||'')}</span>
           ${post.plan_location?`<span class="aftermath-event-loc">\uD83D\uDCCD ${escapeHtml(post.plan_location)}</span>`:''}
-        </div>
-      </div>
+        </span><span class="aftermath-event-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="aftermath-body">${escapeHtml(post.body)}</div>
       ${tags?`<div class="aftermath-tags">${tags}</div>`:''}
       ${mediaHtml?`<div class="aftermath-media ${gridClass}">${mediaHtml}</div>`:''}
@@ -1388,7 +1388,8 @@ async function renderLivedOn(container){
   if(eventsWithout.length){
     eventsHtml=`<div class="lived-events-section"><div class="lived-events-label">Events waiting for your story</div>${eventsWithout.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">+ Share</button></div>`).join('')}</div>`;
   }
-  container.innerHTML=`<div class="lived-header"><p class="lived-label">Your stories</p><p class="lived-sub">${allPosts.length} aftermath ${allPosts.length===1?'post':'posts'} from ${data.length} event${data.length===1?'':'s'}</p></div><div class="lived-feed">${livedPostsHtml}</div>${eventsHtml}`;
+  container.innerHTML=`<div class="lived-header"><div><p class="lived-label">Your stories</p><p class="lived-sub">${allPosts.length} aftermath ${allPosts.length===1?'post':'posts'} from ${data.length} event${data.length===1?'':'s'}</p></div><button class="lived-share-button" type="button" data-lived-share>Share a lived event</button></div><div class="lived-feed">${livedPostsHtml}</div>${eventsHtml}`;
+  container.querySelector('[data-lived-share]')?.addEventListener('click',()=>openAftermathPlanPicker(data));
   container.querySelectorAll('[data-lived-add]').forEach(el=>{
     el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
   });
@@ -1397,7 +1398,21 @@ let activeAftermathPlanId=null;
 function openAftermathComposer(planId){
   activeAftermathPlanId=planId;
   const m=document.querySelector('#aftermath-modal');
-  if(m){ m.classList.add('open'); m.querySelector('#aftermath-status').textContent=''; m.querySelector('#aftermath-body').value=''; m.querySelector('#aftermath-tags').value=''; const list=m.querySelector('#aftermath-file-list'); if(list) list.innerHTML=''; const inp=m.querySelector('#aftermath-files'); if(inp) inp.value=''; }
+  if(m){ m.querySelector('#aftermath-plan-picker').hidden=true; m.querySelector('#aftermath-form').hidden=false; m.classList.add('open'); m.querySelector('#aftermath-status').textContent=''; m.querySelector('#aftermath-body').value=''; m.querySelector('#aftermath-tags').value=''; const list=m.querySelector('#aftermath-file-list'); if(list) list.innerHTML=''; const inp=m.querySelector('#aftermath-files'); if(inp) inp.value=''; }
+}
+function openAftermathPlanPicker(events){
+  const available=(events||[]).filter(event=>event?.plan_id);
+  if(!available.length){showToast('There are no lived events ready to share yet.');return;}
+  if(available.length===1){openAftermathComposer(available[0].plan_id);return;}
+  const modal=document.querySelector('#aftermath-modal');
+  const picker=document.querySelector('#aftermath-plan-picker');
+  const options=document.querySelector('#aftermath-plan-options');
+  if(!modal||!picker||!options)return;
+  options.innerHTML=available.map(event=>`<button class="aftermath-plan-option" type="button" data-aftermath-plan="${escapeHtml(event.plan_id)}"><span><strong>${escapeHtml(event.title||'Untitled event')}</strong><small>${escapeHtml(event.location||'Location to be announced')} · ${escapeHtml(formatDateTime(event.starts_at))}</small></span><b>›</b></button>`).join('');
+  picker.hidden=false;
+  modal.querySelector('#aftermath-form').hidden=true;
+  modal.classList.add('open');
+  options.querySelectorAll('[data-aftermath-plan]').forEach(button=>button.onclick=()=>openAftermathComposer(button.dataset.aftermathPlan));
 }
 async function submitAftermath(e){
   e.preventDefault();
@@ -1715,13 +1730,14 @@ function renderJoinQuestions(post,questions,button,afterRequest){
     const options=Array.isArray(question.options)?question.options:[];
     const required=question.required?'required':'';
     const name=`request-${escapeHtml(question.id)}`;
-    const prompt=`<legend>${index+1}. ${escapeHtml(question.prompt)}${question.required?' <b>Required</b>':''}</legend>`;
+    const prompt=`<legend><span class="request-question-number">${String(index+1).padStart(2,'0')}</span><span class="request-question-copy"><strong>${escapeHtml(question.prompt)}</strong>${question.required?'<small class="is-required">Required</small>':'<small class="is-optional">Optional</small>'}</span></legend>`;
     let control='';
-    if(type==='long_text')control=`<textarea data-request-control rows="4" maxlength="1000" ${required} placeholder="Your answer"></textarea>`;
-    else if(type==='multiple_choice')control=`<div class="request-choice-list">${options.map(option=>`<label><input data-request-control type="radio" name="${name}" value="${escapeHtml(option)}" ${required}> <span>${escapeHtml(option)}</span></label>`).join('')}</div>`;
-    else if(type==='checkboxes')control=`<div class="request-choice-list">${options.map(option=>`<label><input data-request-control type="checkbox" value="${escapeHtml(option)}"> <span>${escapeHtml(option)}</span></label>`).join('')}</div>`;
-    else control=`<input data-request-control type="text" maxlength="1000" ${required} placeholder="Your answer">`;
-    return `<fieldset class="request-question" data-request-question="${escapeHtml(question.id)}" data-request-type="${escapeHtml(type)}">${prompt}${control}</fieldset>`;
+    if(type==='long_text')control=`<label class="request-answer-field"><span class="sr-only">Your answer</span><textarea class="request-long-answer" data-request-control rows="4" maxlength="1000" ${required} placeholder="Write your answer"></textarea></label>`;
+    else if(type==='multiple_choice')control=`<div class="request-choice-list" role="radiogroup" aria-label="${escapeHtml(question.prompt)}">${options.map(option=>`<label class="request-choice"><input data-request-control type="radio" name="${name}" value="${escapeHtml(option)}" ${required}><span class="request-choice-copy">${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else if(type==='checkboxes')control=`<div class="request-choice-list" aria-label="${escapeHtml(question.prompt)}">${options.map(option=>`<label class="request-choice"><input data-request-control type="checkbox" value="${escapeHtml(option)}"><span class="request-choice-copy">${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else control=`<label class="request-answer-field"><span class="sr-only">Your answer</span><input class="request-short-answer" data-request-control type="text" maxlength="1000" ${required} placeholder="Write a short answer"></label>`;
+    const guidance=type==='multiple_choice'?'Choose one option.':type==='checkboxes'?'Choose every option that applies.':type==='long_text'?'A little detail helps the host get to know you.':'Keep it short and clear.';
+    return `<fieldset class="request-question" data-request-question="${escapeHtml(question.id)}" data-request-type="${escapeHtml(type)}" data-request-required="${question.required?'true':'false'}">${prompt}<p class="request-answer-help">${guidance}</p>${control}</fieldset>`;
   }).join('');
   planQuestionsModal.classList.add('open');
 }
@@ -1785,7 +1801,22 @@ planQuestionsForm?.addEventListener('submit',async event=>{
   const pending=pendingPlanRequest;
   const post=posts.find(item=>item.id===pending.postId);
   if(!post){showToast('This event is no longer available.');return;}
-  const answers=[...planQuestionsFields.querySelectorAll('[data-request-question]')].map(field=>{
+  const questionFields=[...planQuestionsFields.querySelectorAll('[data-request-question]')];
+  const unansweredRequired=questionFields.find(field=>{
+    if(field.dataset.requestRequired!=='true')return false;
+    const controls=[...field.querySelectorAll('[data-request-control]')];
+    return ['checkboxes','multiple_choice'].includes(field.dataset.requestType)
+      ?!controls.some(control=>control.checked)
+      :!String(controls[0]?.value||'').trim();
+  });
+  if(unansweredRequired){
+    unansweredRequired.classList.add('has-answer-error');
+    unansweredRequired.querySelector('[data-request-control]')?.focus();
+    showToast('Answer the required question before sending your request.');
+    return;
+  }
+  questionFields.forEach(field=>field.classList.remove('has-answer-error'));
+  const answers=questionFields.map(field=>{
     const type=field.dataset.requestType;
     const controls=[...field.querySelectorAll('[data-request-control]')];
     let answer='';
@@ -2122,7 +2153,7 @@ function wirePremiumProfileInteractions(){
   const profile=document.querySelector('.profile-instagram');
   if(!profile)return;
   document.querySelector('#profile-menu')?.addEventListener('click',event=>{
-    event.preventDefault();event.stopPropagation();activeSavedCollection='plans';setPage('saved');
+    event.preventDefault();event.stopPropagation();toggleProfileMenu(event.currentTarget);
   });
   document.querySelector('#share-profile')?.addEventListener('click',shareCurrentProfile);
   document.querySelectorAll('.profile-tabs [data-profile-tab]').forEach(tab=>{
@@ -2139,6 +2170,100 @@ function wirePremiumProfileInteractions(){
     activatePremiumProfileTab(dx<0?'lived':'plans',{motion:true});
   };
 }
+
+function closeProfileMenu(){
+  document.querySelector('#profile-menu-panel')?.remove();
+  document.querySelector('#profile-menu')?.setAttribute('aria-expanded','false');
+}
+
+function toggleProfileMenu(trigger){
+  const existing=document.querySelector('#profile-menu-panel');
+  if(existing){closeProfileMenu();return;}
+  const signedIn=Boolean(currentUser);
+  const panel=document.createElement('div');
+  panel.id='profile-menu-panel';
+  panel.className='profile-menu-panel';
+  panel.setAttribute('role','menu');
+  panel.innerHTML=`
+    <button type="button" role="menuitem" data-profile-menu-action="settings"><span>⚙</span>Settings</button>
+    <button type="button" role="menuitem" data-profile-menu-action="saved"><span>◇</span>Saved</button>
+    <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span>↓</span>Download Android app</a>
+    <div class="profile-menu-divider"></div>
+    <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span>${signedIn?'↗':'→'}</span>${signedIn?'Log out':'Log in'}</button>`;
+  trigger.parentElement?.append(panel);
+  trigger.setAttribute('aria-expanded','true');
+  panel.querySelectorAll('[data-profile-menu-action]').forEach(button=>button.addEventListener('click',async()=>{
+    const action=button.dataset.profileMenuAction;
+    if(action==='saved'){activeSavedCollection='plans';closeProfileMenu();setPage('saved');return;}
+    if(action==='settings'){closeProfileMenu();setPage('settings');return;}
+    if(action==='login'){closeProfileMenu();loginModal?.classList.add('open');return;}
+    if(action==='logout'){
+      button.disabled=true;
+      const {error}=await supabase?.auth.signOut()||{};
+      if(error){button.disabled=false;showToast(`Could not log out: ${error.message}`);return;}
+      currentUser=null;
+      closeProfileMenu();
+      updateAccountUI();
+      setPage('home');
+      showToast('You are logged out.');
+    }
+  }));
+}
+
+document.addEventListener('click',event=>{
+  const panel=document.querySelector('#profile-menu-panel');
+  if(panel&&!panel.contains(event.target)&&!event.target.closest('#profile-menu'))closeProfileMenu();
+});
+
+let publicEventSource=null;
+function restorePublicEventSource(){
+  const source=publicEventSource;
+  publicEventSource=null;
+  if(!source)return;
+  if(source.page==='home'){goHome();return;}
+  setPage(source.page||'discover');
+  if(source.page==='profile'&&source.tab==='lived'){
+    setTimeout(()=>activatePremiumProfileTab('lived',{motion:true}),0);
+  }
+}
+
+window.addEventListener('popstate',()=>{
+  if(publicEventSource&&document.querySelector('.public-event-page'))restorePublicEventSource();
+});
+
+async function openPublicEventDetails(planId,fallback={}){
+  if(!planId){showToast('This event is no longer available.');return;}
+  const activePage=pageView.hidden?'home':(document.querySelector('[data-page].active')?.dataset.page||'discover');
+  publicEventSource={page:activePage,tab:activePage==='profile'?'lived':null};
+  window.history.pushState({...window.history.state,evenitPublicEvent:true},'',window.location.href);
+  homeElements.forEach(element=>element.hidden=true);
+  pageView.hidden=false;
+  document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
+  pageView.innerHTML='<section class="public-event-page public-event-loading"><span class="public-event-kicker">Lived</span><h2>Loading event details…</h2></section>';
+  const known=posts.find(post=>post.id===planId);
+  let plan={...fallback,...known,id:planId};
+  if(supabase){
+    const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,capacity,user_id').eq('id',planId).maybeSingle();
+    if(!error&&data)plan={...plan,...data};
+    const {data:summary}=await supabase.rpc('get_plan_summaries',{p_plan_ids:[planId]});
+    const counts=rpcRow(summary)||{};
+    if(Number.isFinite(Number(counts.confirmed_count)))plan.joinedCount=Number(counts.confirmed_count);
+  }
+  const when=plan.starts_at?formatDateTime(plan.starts_at):'Date to be announced';
+  const attendance=plan.capacity?`${plan.joinedCount||0} of ${plan.capacity} confirmed`:`${plan.joinedCount||0} confirmed`;
+  const isPast=plan.starts_at&&new Date(plan.starts_at)<new Date();
+  const canRequest=known&&!isPast&&!known.isOwner&&!known.membershipStatus;
+  pageView.innerHTML=`<section class="public-event-page"><span class="public-event-kicker">Lived</span><h2>${escapeHtml(plan.title||'Event details')}</h2><p class="public-event-lead">Everything the host chose to make public about this event.</p><div class="public-event-detail-grid"><section><span>When</span><strong>${escapeHtml(when)}</strong></section><section><span>Where</span><a href="${mapUrl(plan.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(plan.location||'Location to be announced')} ↗</a></section><section><span>Attendance</span><strong>${escapeHtml(attendance)}</strong></section></div>${plan.caption?`<section class="public-event-note"><h3>About this event</h3><p>${escapeHtml(plan.caption)}</p></section>`:''}<p class="public-event-privacy">Private requests, guest answers, and host insights are not shown here.</p>${canRequest?'<button class="public-event-join" type="button" data-public-event-join>Request to join</button>':''}</section>`;
+  pageView.querySelector('[data-public-event-join]')?.addEventListener('click',event=>requestPlanInterest(known,event.currentTarget));
+}
+
+document.addEventListener('click',event=>{
+  const eventLink=event.target.closest('[data-aftermath-event]');
+  if(!eventLink)return;
+  event.preventDefault();
+  event.stopPropagation();
+  openPublicEventDetails(eventLink.dataset.aftermathEvent,{title:eventLink.dataset.eventTitle,location:eventLink.dataset.eventLocation});
+});
 
 // The Plan Board belongs to Home only. It sits outside the main page view, so
 // explicitly keep it in sync whenever navigation changes pages.
