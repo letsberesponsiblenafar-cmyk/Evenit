@@ -2139,4 +2139,12 @@ function wirePremiumProfileInteractions(){
     activatePremiumProfileTab(dx<0?'lived':'plans',{motion:true});
   };
 }
+
+// The Plan Board belongs to Home only. It sits outside the main page view, so
+// explicitly keep it in sync whenever navigation changes pages.
+const profileAwareSetPage=setPage;
+setPage=function(page){
+  document.querySelector('#pulse-bar')?.toggleAttribute('hidden',page!=='home');
+  profileAwareSetPage(page);
+};
 })();
