@@ -20,7 +20,14 @@ function pushAppView(view){window.history.pushState({...window.history.state,eve
 function insightsReturnState(planId){return{...(window.history.state||{}),evenitNavigation:true,route:{kind:'insights',planId,from:{kind:'page',page:'profile',tab:'your-plans'}}}}
 function insightsUrl(planId){const url=new URL(window.location.href);url.hash=`insights/${encodeURIComponent(planId)}`;return url.href}
 function pushHostWorkspaceView(view){const state=insightsReturnState(view.planId);const url=insightsUrl(view.planId);window.history.replaceState(state,'',url);window.history.pushState({...state,evenitAppView:view},'',url)}
-function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
+function goBack(){
+  if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return;}
+  const previousPage=navHistory.pop();
+  if(previousPage){if(previousPage==='home')goHome();else setPage(previousPage);return;}
+  const currentPage=document.querySelector('[data-page].active')?.dataset.page;
+  if(!pageView?.hidden&&currentPage&&currentPage!=='home'){setPage(currentPage);return;}
+  goHome();
+}
 window.addEventListener('popstate',event=>{
   const view=event.state?.evenitAppView;
   if(view?.type==='host-scan-page'){openScanPage(view.planId,{restore:true});return;}
@@ -566,9 +573,12 @@ const pageTemplates={
     const name=currentUser?.user_metadata?.full_name||currentUser?.email?.split('@')[0]||'Your profile';
     const username=currentUser?.user_metadata?.username||'your.profile';
     const createdEvents=posts.filter(post=>post.user_id===currentUser?.id).length;
-    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${loggedIn?'@'+escapeHtml(username):'Your profile'}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open profile menu" aria-expanded="false"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">Your profile</p><h2>${escapeHtml(name)}</h2><p class="profile-handle">${loggedIn?'@'+escapeHtml(username):'Start your Evenit story'}</p></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" hidden><h3>About</h3><p class="profile-about-own" hidden></p></section>${loggedIn?'<div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Join the community'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Create your profile to post events and join other people’s plans.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions"><button class="publish-button" id="profile-signup">Create a profile</button><button class="profile-login-button" id="profile-login">Log in</button></div>'}</div></div></section>`;
+    const title=loggedIn?`@${escapeHtml(username)}`:'Log in';
+    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${title}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open profile menu" aria-expanded="false"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">${loggedIn?'Your profile':'Welcome to Evenit'}</p><h2>${escapeHtml(loggedIn?name:'Your next plan starts here')}</h2></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" ${loggedIn?'':'hidden'}><div class="profile-about-heading"><h3>About</h3><button class="profile-about-add" id="profile-about-add" type="button">Add details</button></div><p class="profile-about-own" hidden></p><p class="profile-about-empty">A few words about you helps people know what plans you love.</p></section>${loggedIn?'<section class="profile-completion-card" id="profile-completion" hidden><div><strong>Complete your profile</strong><p>Add a short About to make your profile feel like yours.</p></div><button id="complete-profile" type="button">Complete</button></section><div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Log in to your profile'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Log in to follow people, request a place, and keep your plans together.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions guest-profile-actions"><button class="publish-button" id="profile-login">Log in</button><button class="profile-login-button" id="profile-signup">Create a profile</button></div>'}</div></div></section>`;
     if(loggedIn){
       document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');
+      document.querySelector('#profile-about-add')?.addEventListener('click',()=>document.querySelector('.edit-profile')?.click());
+      document.querySelector('#complete-profile')?.addEventListener('click',()=>document.querySelector('.edit-profile')?.click());
       loadOwnProfileFollowStats();
     }else{
       document.querySelector('#profile-signup').onclick=()=>signupModal.classList.add('open');
@@ -887,7 +897,7 @@ document.querySelectorAll('[data-page]').forEach(link=>link.onclick=e=>{e.preven
 if(supabase){supabase.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;updateAccountUI();loadPlans();loadAftermathFeed();});supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAccountUI();if(session?.user&&pageView&&!pageView.hidden)renderProfile();loadAftermathFeed();})}else{updateAccountUI();loadPlans();loadAftermathFeed();}
 const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#open-modal-header')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#open-modal-mobile')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
 const loginModal=document.querySelector('#login-modal');const openLogin=()=>loginModal.classList.add('open');document.querySelector('#open-login')?.addEventListener('click',openLogin);document.querySelector('#open-login-mobile')?.addEventListener('click',openLogin);document.querySelector('#close-login').onclick=()=>loginModal.classList.remove('open');loginModal.onclick=e=>{if(e.target===loginModal)loginModal.classList.remove('open')};document.querySelector('#login-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signInWithPassword({email:data.get('email'),password:data.get('password')});if(error){showToast(error.message);return}currentUser=result.user;updateAccountUI();loginModal.classList.remove('open');showToast('Welcome back to upneXt ✦')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};
-const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo:window.location.href,data:{username:data.get('username'),full_name:data.get('full_name'),neighborhood:data.get('neighborhood'),interest:data.get('interest')}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created and you are signed in ✦':'Check your email to verify your profile, then log in ✦');setPage('profile')};
+const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo:window.location.href,data:{username:data.get('username'),full_name:data.get('full_name')}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;if(currentUser)sessionStorage.setItem('evenit-profile-onboarding','1');updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created — add a little about yourself next.':'Check your email to verify your profile, then log in ✦');setPage('profile')};
 document.querySelector('#post-form').onsubmit=async e=>{e.preventDefault();const form=e.target;const data=new FormData(form);const publishButton=form.querySelector('[type="submit"]');if(!supabase){showToast('Connection setup is unavailable. Reopen the app while online.');return}if(!navigator.onLine){showToast('You are offline. Connect to Wi-Fi or mobile data, then try again.');return}const {data:sessionData,error:sessionError}=await supabase.auth.getSession();const liveUser=sessionData?.session?.user;if(sessionError||!liveUser){currentUser=null;updateAccountUI();showToast('Your login expired. Please log in again before publishing.');loginModal.classList.add('open');return}currentUser=liveUser;const capacityValue=String(data.get('capacity')||'').trim();const capacity=capacityValue?Number(capacityValue):null;if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1)){showToast('Attendance limit must be a whole number greater than zero');return}const startsValue=String(data.get('when')||'').trim();const startsAt=startsValue?new Date(startsValue):null;if(!startsAt||Number.isNaN(startsAt.getTime())){showToast('Choose a valid date and time for the event.');return}publishButton.disabled=true;publishButton.textContent='Publishing…';try{let {data:profile,error:profileError}=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();if(profileError)throw profileError;if(!profile){const metadata=currentUser.user_metadata||{};const {error:createProfileError}=await supabase.from('profiles').upsert({id:currentUser.id,username:metadata.username||currentUser.email.split('@')[0],full_name:metadata.full_name||null});if(createProfileError)throw new Error('Your profile needs to finish syncing: '+createProfileError.message);const result=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();profile=result.data}const {data:plan,error}=await supabase.from('plans').insert({user_id:currentUser.id,title:String(data.get('title')).trim(),location:String(data.get('where')).trim(),starts_at:startsAt.toISOString(),caption:String(data.get('caption')||'').trim()||null,category:data.get('category'),capacity,neighborhood:profile?.neighborhood||null,requires_college_verification:data.get('requires_college_verification')==='on'}).select('id').single();if(error)throw error;if(profile?.latitude!==null&&profile?.latitude!==undefined&&profile?.longitude!==null&&profile?.longitude!==undefined){const {error:locationError}=await supabase.from('plan_locations').upsert({plan_id:plan.id,latitude:profile.latitude,longitude:profile.longitude,updated_at:new Date().toISOString()});if(locationError)showToast('Plan published; nearby-distance matching is still syncing.')}const passMemo=String(data.get('pass_memo')||'').trim();if(passMemo){const {error:passError}=await supabase.from('plan_passes').upsert({plan_id:plan.id,memo:passMemo,updated_at:new Date().toISOString()});if(passError)showToast('Plan published; the entry note could not be saved.')}modal.classList.remove('open');form.reset();await loadPlans();showToast('Your plan is live on Evenit ✦')}catch(error){console.error('Plan publish failed',error);showToast(`Could not publish: ${error?.message||'Please try again.'}`)}finally{publishButton.disabled=false;publishButton.innerHTML='Create plan <span>→</span>'}};
 function showToast(message){const toast=document.querySelector('#toast');toast.textContent=message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2400)}
 function withEvenitTimeout(promise,ms,message){let timeout;return Promise.race([promise,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error(message)),ms)})]).finally(()=>clearTimeout(timeout))}
@@ -2447,7 +2457,16 @@ loadProfileDetails=async function(){
   await establishedLoadProfileDetails();
   const about=document.querySelector('.profile-about-own');
   const aboutSection=document.querySelector('.profile-about-section');
-  if(aboutSection)aboutSection.hidden=!about?.textContent.trim();
+  if(!aboutSection)return;
+  if(!currentUser){aboutSection.hidden=true;return;}
+  const hasAbout=Boolean(about?.textContent.trim());
+  aboutSection.hidden=false;
+  if(about)about.hidden=!hasAbout;
+  const emptyAbout=document.querySelector('.profile-about-empty');
+  if(emptyAbout)emptyAbout.hidden=hasAbout;
+  const completion=document.querySelector('#profile-completion');
+  if(completion)completion.hidden=hasAbout;
+  if(hasAbout)sessionStorage.removeItem('evenit-profile-onboarding');
 };
 const establishedProfileRenderer=renderProfile;
 renderProfile=function(){
@@ -2520,6 +2539,25 @@ function closeProfileMenu(){
   document.querySelector('#profile-menu')?.setAttribute('aria-expanded','false');
 }
 
+function applyEvenitTheme(mode){
+  const theme=mode==='dark'?'dark':'light';
+  document.documentElement.dataset.evenitTheme=theme;
+  try{localStorage.setItem('evenit-theme',theme);}catch{}
+  document.querySelectorAll('[data-profile-menu-action="theme-light"],[data-profile-menu-action="theme-dark"]').forEach(button=>{
+    button.classList.toggle('is-selected',button.dataset.profileMenuAction===`theme-${theme}`);
+    button.setAttribute('aria-pressed',String(button.dataset.profileMenuAction===`theme-${theme}`));
+  });
+}
+try{applyEvenitTheme(localStorage.getItem('evenit-theme')||'light');}catch{applyEvenitTheme('light');}
+
+function openProfileMenuPage(page){
+  const route={kind:'page',page,tab:page==='profile'?'your-plans':undefined};
+  const url=new URL(window.location.href);
+  url.hash=page;
+  window.history.pushState({...(window.history.state||{}),evenitNavigation:true,route},'',url);
+  setPage(page);
+}
+
 function toggleProfileMenu(trigger){
   const existing=document.querySelector('#profile-menu-panel');
   if(existing){closeProfileMenu();return;}
@@ -2531,6 +2569,9 @@ function toggleProfileMenu(trigger){
   panel.innerHTML=`
     <button type="button" role="menuitem" data-profile-menu-action="settings"><span>⚙</span>Settings</button>
     <button type="button" role="menuitem" data-profile-menu-action="saved"><span>◇</span>Saved</button>
+    <div class="profile-menu-label">Appearance</div>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-light" aria-pressed="false"><span>☀</span>Light mode</button>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-dark" aria-pressed="false"><span>◐</span>Dark mode</button>
     <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span>↓</span>Download Android app</a>
     <div class="profile-menu-divider"></div>
     <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span>${signedIn?'↗':'→'}</span>${signedIn?'Log out':'Log in'}</button>`;
@@ -2538,8 +2579,9 @@ function toggleProfileMenu(trigger){
   trigger.setAttribute('aria-expanded','true');
   panel.querySelectorAll('[data-profile-menu-action]').forEach(button=>button.addEventListener('click',async()=>{
     const action=button.dataset.profileMenuAction;
-    if(action==='saved'){activeSavedCollection='plans';closeProfileMenu();setPage('saved');return;}
-    if(action==='settings'){closeProfileMenu();setPage('settings');return;}
+    if(action==='theme-light'||action==='theme-dark'){applyEvenitTheme(action.replace('theme-',''));closeProfileMenu();showToast(`${action==='theme-dark'?'Dark':'Light'} mode enabled`);return;}
+    if(action==='saved'){activeSavedCollection='plans';closeProfileMenu();openProfileMenuPage('saved');return;}
+    if(action==='settings'){closeProfileMenu();openProfileMenuPage('settings');return;}
     if(action==='login'){closeProfileMenu();loginModal?.classList.add('open');return;}
     if(action==='logout'){
       button.disabled=true;

@@ -74,7 +74,13 @@
 
   function activatePage(route,done){
     const link=document.querySelector(`[data-page="${route.page}"]`);
-    if(!link){if(done)done();return}
+    if(!link){
+      // Settings and Saved are opened from Profile's menu rather than the
+      // permanent dock. They still need to restore correctly on Back/Forward.
+      if(typeof window.setPage==='function')window.setPage(route.page);
+      if(done)setTimeout(done,0);
+      return;
+    }
     closeMobileMenu();
     replayClick(link);
     if(route.page==='profile'&&route.tab&&route.tab!=='your-plans'){
@@ -111,7 +117,7 @@
   function goBack(){
     if(currentRoute&&currentRoute.kind==='page'&&currentRoute.page==='home'&&(!currentRoute.tab||currentRoute.tab==='your-plans'))return;
     if(window.history.state?.[stateKey])window.history.back();
-    else renderRoute(pageRoute('home'));
+    else renderRoute(currentRoute?.from||pageRoute('profile'));
   }
 
   function profileTabName(button){
