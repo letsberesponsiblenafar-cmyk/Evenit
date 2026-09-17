@@ -886,7 +886,7 @@ setPage=function(page){
     document.querySelector('#open-group-create')?.addEventListener('click',()=>currentUser?document.querySelector('#group-modal')?.classList.add('open'):loginModal?.classList.add('open'));
   }
 };
-function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;const key=tab.textContent.toLowerCase();
+function renderProfileTab(tab){const content=document.querySelector('.profile-empty');if(!content)return;if(!currentUser){content.innerHTML='<span>✦</span><h3>Log in to your profile</h3><p>Log in to follow people, request a place, and keep your plans together.</p><div class="profile-actions guest-profile-actions"><button class="publish-button" id="profile-login">Log in</button><button class="profile-login-button" id="profile-signup">Create a profile</button></div>';document.querySelector('#profile-login')?.addEventListener('click',()=>loginModal?.classList.add('open'));document.querySelector('#profile-signup')?.addEventListener('click',()=>signupModal?.classList.add('open'));return;}const key=tab.textContent.toLowerCase();
 if(key.includes('lived')){ renderLivedOn(content); return; }
 const items=key.includes('saved')?posts.filter(post=>savedEventIds.has(post.id||post.title)):posts.filter(post=>post.user_id===currentUser?.id);
 if(!items.length){content.innerHTML=`<span>✦</span><h3>No ${key} events yet</h3><p>Your ${key} events will appear here.</p>${key.includes('plans')?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>' :''}`;const create=document.querySelector('#profile-post');if(create)create.onclick=()=>modal.classList.add('open');return}
