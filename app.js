@@ -17,8 +17,11 @@ let collegeVerificationReady=false;
 let navHistory=[];
 function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.shift()}
 function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
+function insightsReturnState(planId){return{...(window.history.state||{}),evenitNavigation:true,route:{kind:'insights',planId,from:{kind:'page',page:'profile',tab:'your-plans'}}}}
+function insightsUrl(planId){const url=new URL(window.location.href);url.hash=`insights/${encodeURIComponent(planId)}`;return url.href}
+function pushHostWorkspaceView(view){const state=insightsReturnState(view.planId);const url=insightsUrl(view.planId);window.history.replaceState(state,'',url);window.history.pushState({...state,evenitAppView:view},'',url)}
 function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
-window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});});
+window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});if(view.type==='host-scan')openScanModal(view.planId,{restore:true});});
 function goHome(){
   setInsightsDockScan(null);
   navHistory=[];
@@ -537,6 +540,12 @@ document.querySelectorAll('.share-option').forEach(b=>b.onclick=async()=>{
 renderPosts();
 const pageView=document.querySelector('#page-view');
 const homeElements=[document.querySelector('.feed-top'),document.querySelector('.stories'),postsEl];
+function loadPlansPreservingHostWorkspace(){
+  if(!pageView?.querySelector('.host-approval-insights,.host-request-review'))return loadPlans();
+  const profileRenderer=renderProfile;
+  renderProfile=()=>{};
+  return Promise.resolve(loadPlans()).finally(()=>{renderProfile=profileRenderer;});
+}
 const pageTemplates={
   discover:`<div class="page-header"><p class="overline">Find your people</p><h2>Discover plans<br><em>worth joining.</em></h2><div class="search-box">⌕ <input placeholder="Search plans, places, or people..."></div></div><div class="discover-grid"><div class="discover-tile tile-violet"><small>OUTDOORS</small><strong>Golden hour<br>on the water</strong><span>16 people going →</span></div><div class="discover-tile tile-gold"><small>FOOD & DRINK</small><strong>Sunday supper<br>club</strong><span>12 people going →</span></div><div class="discover-tile tile-ink"><small>CREATIVE</small><strong>Make a tiny<br>zine together</strong><span>8 people going →</span></div></div>`,
   notifications:`<div class="page-header"><p class="overline">Stay in the loop</p><h2>Notifications</h2></div><div class="activity-list"><div class="activity"><img src="https://i.pravatar.cc/100?img=47"><p><strong>ari.makes</strong> joined your plan <b>Sunset picnic</b><small>12 minutes ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=25"><p><strong>maya.rose</strong> liked your plan <b>Saturday sketch walk</b><small>1 hour ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=44"><p><strong>theo.walks</strong> started following you<small>Yesterday</small></p></div></div>`,
@@ -1089,8 +1098,9 @@ replaceBrand();
     if(row?.valid){
       setScanResult(`Entry verified: ${row.attendee_name} for ${row.plan_title}`, 'valid');
       showToast(`Checked in ${row.attendee_name} \u2713`);
-      if(row.plan_id) await renderInsights(row.plan_id);
-      else if(activeScanPlanId) await renderInsights(activeScanPlanId);
+      const planId=row.plan_id||activeScanPlanId;
+      await closeScanModal({returnToInsights:false});
+      if(planId) await renderInsights(planId);
       await loadEntryPasses();
     }else{
       const reason=row?.reason||'Pass could not be verified';
@@ -1129,15 +1139,27 @@ replaceBrand();
     }
     setScanStatus('Camera idle', '');
   }
-  function openScanModal(planId){
+  async function closeScanModal({returnToInsights=true}={}){
+    const planId=activeScanPlanId;
+    await stopScanner();
+    scanModal.classList.remove('open');
+    activeScanPlanId=null;
+    if(returnToInsights&&window.history.state?.evenitAppView?.type==='host-scan'){
+      window.history.back();
+      return;
+    }
+    if(returnToInsights&&planId&&!pageView?.querySelector('.host-approval-insights'))await renderInsights(planId);
+  }
+  function openScanModal(planId,options={}){
     activeScanPlanId=planId;
     scanInput.value='';
     setScanResult('', '');
     scanModal.classList.add('open');
+    if(!options.restore)pushHostWorkspaceView({type:'host-scan',planId});
     startScanner();
   }
-  scanModal.querySelector('#close-scan').onclick=async()=>{ await stopScanner(); scanModal.classList.remove('open'); };
-  scanModal.onclick=async event=>{ if(event.target===scanModal){ await stopScanner(); scanModal.classList.remove('open'); } };
+  scanModal.querySelector('#close-scan').onclick=()=>closeScanModal();
+  scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
   scanInput.addEventListener('keydown', event=>{ if(event.key==='Enter'){ event.preventDefault(); verifyScannedToken(scanInput.value); } });
 
@@ -1464,7 +1486,7 @@ function scheduleEvenitLiveRefresh(kind){
   clearTimeout(evenitLiveRefreshTimer);
   evenitLiveRefreshTimer=setTimeout(()=>{
     const activePage=document.querySelector('[data-page].active')?.dataset.page;
-    if(kind==='plans'){loadPlans();if(activePage==='discover')renderDiscover();}
+    if(kind==='plans'){loadPlansPreservingHostWorkspace();if(activePage==='discover')renderDiscover();}
     if(kind==='insights'&&activeInsightsPlanId&&pageView?.querySelector('.host-approval-insights')){
       renderInsights(activeInsightsPlanId);
     }
@@ -1523,7 +1545,7 @@ function refreshEvenitLiveData({quiet=false}={}){
   setEvenitConnectionState(true,'Refreshing your live data…');
   const cycle=(async()=>{
     try{
-      await Promise.all([loadPlans(),loadAftermathFeed()]);
+      await Promise.all([loadPlansPreservingHostWorkspace(),loadAftermathFeed()]);
       const activePage=document.querySelector('[data-page].active')?.dataset.page;
       if(activePage==='discover')await loadFollowingEvents();
       if(activePage==='notifications')await renderNotifications();
@@ -1717,7 +1739,7 @@ renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
-window.addEventListener('evenit:native-back',()=>{if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
+window.addEventListener('evenit:native-back',()=>{if(scanModal?.classList.contains('open')){closeScanModal();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
 // Host-approved requests and entry passes. This layer intentionally replaces
 // the older auto-confirm path while retaining legacy confirmed memberships.
@@ -2114,7 +2136,7 @@ async function openHostRequestReview(planId,userId,options={}){
   activeInsightsPlanId=planId;
   showInsightsShell();
   setInsightsDockScan(planId);
-  if(!options.restore)pushAppView({type:'host-request-review',planId,userId});
+  if(!options.restore)pushHostWorkspaceView({type:'host-request-review',planId,userId});
   pageView.innerHTML='<section class="host-request-review"><p class="overline">Host review</p><h2>Loading request…</h2></section>';
   const [insightResult,verificationByUser]=await Promise.all([
     supabase.rpc('get_plan_insights',{p_plan_id:planId}),
