@@ -18,7 +18,7 @@ let navHistory=[];
 function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.shift()}
 function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
 function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
-window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true})});
+window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}});
 function goHome(){
   navHistory=[];
   pageView.hidden=true;
@@ -210,11 +210,11 @@ function showAgendaDetail(planId,options={}){
   // One primary action at a time keeps the event-entry journey unambiguous.
   const passAction=post.entryPass&&post.membershipStatus==='confirmed'&&post.verificationComplete?`<button class="agenda-primary" data-agenda-pass="${escapeHtml(post.id)}">${post.entryPass.checked_in_at?'View checked-in pass':'View QR entry pass'}</button>`:'';
   const verificationAction=!isMember&&needsVerification?`<button class="agenda-primary" data-agenda-verify="${escapeHtml(post.id)}">${needsProfileDetails?'Add private details':'Authorize and join event'}</button>`:'';
-  const joinAction=!isMember&&!needsVerification&&!isPast&&!isOwner?`<button class="agenda-primary" data-agenda-join="${escapeHtml(post.id)}">Join this event</button>`:'';
+  const joinAction=!isMember&&!needsVerification&&!isPast&&!isOwner?`<button class="agenda-primary" data-agenda-join="${escapeHtml(post.id)}">Show interest</button>`:'';
   const hostAction=isOwner?`<button class="joined-action-btn insights-btn" data-insights-id="${escapeHtml(post.id)}">View host insights ↗</button>`:'';
   const leaveAction=!isOwner&&!isPast&&(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted')?`<button class="joined-action-btn leave-btn" data-agenda-leave="${escapeHtml(post.id)}">Leave event</button>`:'';
   const waitlistNote=post.membershipStatus==='waitlisted'?'<p class="agenda-note">You are on the waitlist. Your pass will appear here automatically if a place opens.</p>':'';
-  const entryState=isMember?(post.membershipStatus==='waitlisted'?'You are on the waitlist.':'Your place is confirmed.'):(needsVerification?'One private verification step remains.':'You are ready to join.');
+  const entryState=isMember?(post.membershipStatus==='waitlisted'?'You are on the waitlist.':'Your place is confirmed.'):(needsVerification?'One private verification step remains.':'You are ready to show interest.');
   pageView.innerHTML=`<section class="agenda-detail"><button class="back-to-home" data-agenda-back>← Your timeline</button><div class="agenda-hero"><span class="joined-badge ${status.className}">${status.label}</span><p class="overline">${escapeHtml(post.category||'Community event')}</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="agenda-detail-grid"><section class="agenda-panel"><h3>Event details</h3><dl><div><dt>When</dt><dd>${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</dd></div><div><dt>Where</dt><dd><a href="${mapUrl(post.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(post.location||'Location to be announced')} ↗</a></dd></div><div><dt>Attendance</dt><dd>${escapeHtml(attendance)}</dd></div></dl><p class="agenda-description">${escapeHtml(post.caption)}</p></section><section class="agenda-panel agenda-entry-panel"><div class="agenda-panel-heading"><h3>Your entry</h3><span>${escapeHtml(entryState)}</span></div><p class="agenda-requirement"><strong>Verification</strong>${escapeHtml(requirements)}</p>${waitlistNote}<div class="agenda-primary-action">${verificationAction||joinAction||passAction}</div><div class="agenda-actions">${hostAction}${leaveAction}</div></section></div></section>`;
   pageView.querySelector('[data-agenda-back]').onclick=goBack;
   pageView.querySelector('[data-agenda-pass]')?.addEventListener('click',()=>openEntryPass(post,post.entryPass));
@@ -818,6 +818,16 @@ async function doSwipe(interested){
       try{ await supabase.from('plan_swipes').upsert({user_id: currentUser?.id, plan_id: p.id, interested: false, updated_at: new Date().toISOString()}); }catch{}
       const matching=posts.find(post=>post.id===p.id);if(matching){matching.swipeInterest=false;matching.interested=false;}
     }
+  }
+  if(interested){
+    // A positive swipe expresses intent, then opens the same complete request
+    // page as the Interested button. It does not silently submit or bypass
+    // the host's questions and verification requirements.
+    const matching=posts.find(post=>post.id===p.id)||p;
+    swipeIndex++;
+    renderSwipeCard();
+    await requestPlanInterest(matching);
+    return;
   }
   showToast(interested?'Interested \u2713 — added to your timeline':'Passed — we’ll show you less like this');
   await new Promise(r=>setTimeout(r,380));
@@ -1645,7 +1655,7 @@ function renderHomeEventCards(){
     const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
     const requirement=joinRequirement(post);
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;
-    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':isPast?'Event ended':'Join';
+    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
       <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
@@ -1757,20 +1767,6 @@ function reflectPlanInterest(post,row){
   if(pageView?.hidden&&typeof renderHomeEventCards==='function')renderHomeEventCards();
 }
 
-async function confirmPlanInterestStored(planId,userId){
-  const {data,error}=await supabase
-    .from('plan_members')
-    .select('status,queue_position,confirmed_at')
-    .eq('plan_id',planId)
-    .eq('user_id',userId)
-    .maybeSingle();
-  if(error)throw error;
-  if(!data||!['interested','waitlisted','confirmed'].includes(data.status)){
-    throw new Error('The request was not recorded. Please send it again.');
-  }
-  return data;
-}
-
 async function completePlanInterest(post,button,answers=null){
   if(button){button.disabled=true;button.textContent='Sending…';}
   try{
@@ -1780,16 +1776,14 @@ async function completePlanInterest(post,button,answers=null){
       ?await withEvenitTimeout(supabase.rpc('join_plan',{p_plan_id:post.id}),15000,'Your request took too long. Please try again.')
       :await withEvenitTimeout(supabase.rpc('submit_plan_join_request',{p_plan_id:post.id,p_answers:answers}),15000,'Your request took too long. Please try again.');
     if(result.error)throw result.error;
-    const resultRow=rpcRow(result.data);
-    // Do not show a successful request until the membership row is actually
-    // visible in Supabase. This prevents a false success for the guest while
-    // the organizer has nothing to review in Insights.
-    const storedMembership=await withEvenitTimeout(
-      confirmPlanInterestStored(post.id,currentUser.id),
-      8000,
-      'We could not confirm that your request was saved. Please try again.'
-    );
-    const row={...(resultRow||{}),...storedMembership};
+    // The security-definer RPC is the authoritative write and response. A
+    // second direct plan_members read can be rejected by RLS even when the
+    // request was successfully recorded, which incorrectly made Send request
+    // look broken. Only accept a valid server-confirmed membership result.
+    const row=rpcRow(result.data);
+    if(!row||!['interested','waitlisted','confirmed'].includes(row.status)){
+      throw new Error('The request was not confirmed by the database. Please try again.');
+    }
     reflectPlanInterest(post,row);
     await refreshEvenitLiveData({quiet:true});
     if(row?.status==='confirmed')showToast('You are confirmed — your entry pass is ready.');
@@ -1799,25 +1793,129 @@ async function completePlanInterest(post,button,answers=null){
     showToast(`Could not send your request: ${error?.message||'Please try again.'}`);
     return false;
   }finally{
-    // A successful optimistic redraw replaces this element. Do not write
-    // "Join" back into a card whose request has already been accepted.
-    if(button&&button.isConnected&&!post.membershipStatus){button.disabled=false;button.textContent='Join';}
+    // A successful optimistic redraw replaces this element. Do not overwrite
+    // a card whose request has already been accepted.
+    if(button&&button.isConnected&&!post.membershipStatus){button.disabled=false;button.textContent='Interested';}
   }
 }
 
 async function requestPlanInterest(post,button,afterRequest){
   if(!post)return false;
   if(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.membershipStatus==='interested')return true;
-  if(!supabase||!currentUser){showToast('Log in to join this event');loginModal?.classList.add('open');return false;}
-  const requirement=joinRequirement(post);
-  if(requirement){showToast(requirement.message);openPlanVerification(post);return false;}
+  if(!supabase||!currentUser){showToast('Log in to show interest in this event');loginModal?.classList.add('open');return false;}
+  return openPlanRequestPage(post,{afterRequest});
+}
+
+let activePlanRequestId=null;
+function renderPlanRequestQuestions(questions){
+  if(!questions.length)return '<div class="request-page-empty"><strong>No questions from the host</strong><span>You can send your interest request when you are ready.</span></div>';
+  return questions.map((question,index)=>{
+    const type=question.question_type||'short_text';
+    const options=Array.isArray(question.options)?question.options:[];
+    const required=question.required?'required':'';
+    const fieldName=`plan-request-${escapeHtml(question.id)}`;
+    let control='';
+    if(type==='long_text')control=`<textarea class="request-long-answer" data-request-control rows="5" maxlength="1000" ${required} placeholder="Write your answer"></textarea>`;
+    else if(type==='multiple_choice')control=`<div class="request-choice-list" role="radiogroup" aria-label="${escapeHtml(question.prompt)}">${options.map(option=>`<label class="request-choice"><input data-request-control type="radio" name="${fieldName}" value="${escapeHtml(option)}" ${required}><span class="request-choice-copy">${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else if(type==='checkboxes')control=`<div class="request-choice-list" aria-label="${escapeHtml(question.prompt)}">${options.map(option=>`<label class="request-choice"><input data-request-control type="checkbox" value="${escapeHtml(option)}"><span class="request-choice-copy">${escapeHtml(option)}</span></label>`).join('')}</div>`;
+    else control=`<input class="request-short-answer" data-request-control type="text" maxlength="1000" ${required} placeholder="Write a short answer">`;
+    const hint=type==='multiple_choice'?'Choose one option.':type==='checkboxes'?'Select every option that applies.':type==='long_text'?'A little detail helps the host get to know you.':'Keep it short and clear.';
+    return `<fieldset class="request-question request-page-question" data-request-question="${escapeHtml(question.id)}" data-request-type="${escapeHtml(type)}" data-request-required="${question.required?'true':'false'}"><legend><span class="request-question-number">${String(index+1).padStart(2,'0')}</span><span class="request-question-copy"><strong>${escapeHtml(question.prompt)}</strong>${question.required?'<small class="is-required">Required</small>':'<small class="is-optional">Optional</small>'}</span></legend><p class="request-answer-help">${hint}</p><div class="request-page-control">${control}</div></fieldset>`;
+  }).join('');
+}
+
+function renderPlanRequestSuccess(post){
+  pageView.innerHTML=`<section class="plan-request-page request-page-success"><span class="request-success-mark">✓</span><p class="overline">Interest sent</p><h2>Your request is with the host.</h2><p>The organizer can now review your details in Insights and choose whether to issue an entry pass.</p><div class="request-success-event"><strong>${escapeHtml(post.title)}</strong><span>${escapeHtml(post.location||'Location to be announced')} · ${escapeHtml(formatDateTime(post.starts_at))}</span></div><button class="publish-button" id="view-request-timeline" type="button">View your plans <span>→</span></button></section>`;
+  pageView.querySelector('#view-request-timeline')?.addEventListener('click',()=>showJoinedPage());
+}
+
+async function savePlanRequestVerification(post,form){
+  if(!post.requiresCollegeVerification)return;
+  const college=String(new FormData(form).get('college')||'').trim();
+  const enrollmentId=String(new FormData(form).get('enrollment_id')||'').trim();
+  const allowed=form.querySelector('[name="share_verification"]')?.checked;
+  if(!college||!enrollmentId||!allowed){
+    throw new Error('Add your college and enrollment ID, then approve access for this event.');
+  }
+  const {error:profileError}=await supabase.from('profiles').update({college,enrollment_id:enrollmentId}).eq('id',currentUser.id);
+  if(profileError)throw profileError;
+  const {error:accessError}=await supabase.rpc('grant_plan_verification_access',{p_plan_id:post.id});
+  if(accessError)throw accessError;
+  collegeVerificationReady=true;
+  post.hasCollegeDetails=true;
+  post.verificationShared=true;
+  post.verificationComplete=true;
+}
+
+async function openPlanRequestPage(post,options={}){
+  if(!post||!supabase||!currentUser)return false;
+  activePlanRequestId=post.id;
+  if(!options.restore)pushAppView({type:'plan-request',planId:post.id});
+  homeElements.forEach(element=>element.hidden=true);
+  pageView.hidden=false;
+  pageView.dataset.planRequestId=post.id;
+  document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
+  updateMobileHeader('home');
+  pageView.innerHTML='<section class="plan-request-page plan-request-loading"><p class="overline">Show interest</p><h2>Preparing the event details…</h2></section>';
   try{
-    const questions=await loadPlanJoinQuestions(post.id);
-    if(questions.length){renderJoinQuestions(post,questions,button,afterRequest);return false;}
-    const sent=await completePlanInterest(post,button);
-    if(sent&&afterRequest)afterRequest(post.id);
-    return sent;
-  }catch(error){showToast(`Could not prepare your request: ${error?.message||'Please try again.'}`);return false;}
+    const [questionsResult,profileResult]=await Promise.all([
+      loadPlanJoinQuestions(post.id),
+      supabase.from('profiles').select('college,enrollment_id').eq('id',currentUser.id).maybeSingle()
+    ]);
+    if(activePlanRequestId!==post.id||pageView.dataset.planRequestId!==post.id)return false;
+    const questions=questionsResult||[];
+    const profile=profileResult.data||{};
+    const description=post.caption||'The host has not added a longer description for this event.';
+    const verification=post.requiresCollegeVerification?`<section class="request-verification-section"><div class="request-section-heading"><p class="overline">Required for this event</p><h3>College verification</h3><p>Your details stay private on your profile. They are shared only with this event’s organizer after you approve access below.</p></div><div class="request-verification-fields"><label>College<input name="college" value="${escapeHtml(profile.college||'')}" autocomplete="organization" required placeholder="Your college"></label><label>Enrollment ID<input name="enrollment_id" value="${escapeHtml(profile.enrollment_id||'')}" required placeholder="Your enrollment ID"></label></div><label class="request-consent"><input type="checkbox" name="share_verification" required><span><strong>Share these details with this organizer</strong><small>Only for ${escapeHtml(post.title)}. They will not appear publicly.</small></span></label></section>`:'';
+    pageView.innerHTML=`<section class="plan-request-page"><header class="request-page-hero"><p class="overline">Show interest</p><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(description)}</p></header><section class="request-scene"><div><span>Scene</span><strong>${escapeHtml(post.category||'Community event')}</strong></div><div><span>Date &amp; time</span><strong>${escapeHtml(formatDateTime(post.starts_at))}</strong></div><div><span>Location</span><a href="${mapUrl(post.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(post.location||'Location to be announced')} ↗</a></div></section><form id="plan-request-page-form" novalidate><section class="request-form-section"><div class="request-section-heading"><p class="overline">Hosted questions</p><h3>Tell the host a little about you</h3><p>These answers are visible only to the organizer of this event.</p></div><div class="request-page-question-list">${renderPlanRequestQuestions(questions)}</div></section>${verification}<div class="request-submit-area"><p>Sending this request does not issue a pass. The organizer chooses who receives one.</p><button class="publish-button" type="submit">Send request <span>→</span></button></div></form></section>`;
+    const form=pageView.querySelector('#plan-request-page-form');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const currentPost=posts.find(item=>item.id===post.id)||post;
+      const fields=[...form.querySelectorAll('[data-request-question]')];
+      const missing=fields.find(field=>{
+        if(field.dataset.requestRequired!=='true')return false;
+        const controls=[...field.querySelectorAll('[data-request-control]')];
+        return ['checkboxes','multiple_choice'].includes(field.dataset.requestType)
+          ?!controls.some(control=>control.checked)
+          :!String(controls[0]?.value||'').trim();
+      });
+      if(missing){
+        missing.classList.add('has-answer-error');
+        missing.scrollIntoView({behavior:'smooth',block:'center'});
+        missing.querySelector('[data-request-control]')?.focus();
+        showToast('Answer the required question before sending your request.');
+        return;
+      }
+      fields.forEach(field=>field.classList.remove('has-answer-error'));
+      const answers=fields.map(field=>{
+        const controls=[...field.querySelectorAll('[data-request-control]')];
+        const type=field.dataset.requestType;
+        const answer=type==='checkboxes'?controls.filter(control=>control.checked).map(control=>control.value):type==='multiple_choice'?(controls.find(control=>control.checked)?.value||''):(controls[0]?.value.trim()||'');
+        return {question_id:field.dataset.requestQuestion,answer};
+      });
+      const submit=form.querySelector('[type="submit"]');
+      submit.disabled=true;
+      submit.textContent='Sending…';
+      try{
+        await savePlanRequestVerification(currentPost,form);
+        const sent=await completePlanInterest(currentPost,null,questions.length?answers:null);
+        if(!sent)return;
+        renderPlanRequestSuccess(currentPost);
+        if(options.afterRequest)options.afterRequest(currentPost.id);
+      }catch(error){
+        showToast(`Could not send your request: ${error?.message||'Please try again.'}`);
+      }finally{
+        if(submit.isConnected){submit.disabled=false;submit.innerHTML='Send request <span>→</span>';}
+      }
+    });
+  }catch(error){
+    pageView.innerHTML=`<section class="plan-request-page request-page-error"><p class="overline">Show interest</p><h2>We could not prepare this request.</h2><p>${escapeHtml(error?.message||'Please check your connection and try again.')}</p><button class="publish-button" id="retry-plan-request" type="button">Try again</button></section>`;
+    pageView.querySelector('#retry-plan-request')?.addEventListener('click',()=>openPlanRequestPage(post,{...options,restore:true}));
+    return false;
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+  return true;
 }
 
 planQuestionsForm?.addEventListener('submit',async event=>{
@@ -1908,7 +2006,7 @@ renderHomeEventCards=function(){
     const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
     const requirement=joinRequirement(post);
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} confirmed`;
-    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Join';
+    const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
       <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
