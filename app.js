@@ -1048,7 +1048,27 @@ async function openDirectConversation(profile,options={}){
   await loadThread();
   document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await loadThread();};
 }
-async function loadPublicAftermath(profileId){const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);if(!target||!supabase)return;const {data,error}=await supabase.from('plan_aftermath_posts').select('id,body,hashtags,created_at,plan_id').eq('author_id',profileId).order('created_at',{ascending:false}).limit(20);if(target.dataset.aftermathProfile!==profileId)return;if(error||!data?.length){target.innerHTML='<div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';return;}const cards=data.map(post=>`<article class="aftermath-card lived-card"><div class="aftermath-body">${escapeHtml(post.body)}</div>${post.hashtags?.length?`<div class="aftermath-tags">${post.hashtags.map(tag=>`<span class="aftermath-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`:''}<div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div></article>`).join('');target.innerHTML=cards;}
+async function getProfileAftermath(profileId){
+  if(!supabase||!profileId)return [];
+  const {data,error}=await supabase.rpc('get_profile_aftermath',{p_user_id:profileId,p_limit:20});
+  if(error)throw error;
+  return Promise.all((data||[]).map(async post=>{
+    const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id',post.id);
+    return {...post,media:media||[]};
+  }));
+}
+async function loadPublicAftermath(profileId){
+  const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);
+  if(!target||!supabase)return;
+  try{
+    const posts=await getProfileAftermath(profileId);
+    if(target.dataset.aftermathProfile!==profileId)return;
+    target.innerHTML=posts.length?renderAftermathCards(posts):'<div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';
+    wireAftermathActions();
+  }catch(error){
+    if(target.dataset.aftermathProfile===profileId)target.innerHTML='<div class="lived-empty compact"><p>Could not load aftermath right now.</p></div>';
+  }
+}
 
 async function openPublicProfileConnectionList(profileId,list,{restore=false}={}){
   if(!supabase||!profileId)return;
@@ -1727,17 +1747,13 @@ async function renderLivedOn(container){
     return;
   }
   let allPosts=[];
-  for(const row of data){
-    const {data:aft}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id: row.plan_id});
-    if(aft){
-      for(const post of aft.filter(post=>post.author_id===currentUser.id)){
-        const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id', post.id);
-        allPosts.push({...post, media: media||[], plan_title:row.title, plan_location:row.location});
-      }
-    }
+  try{
+    // Use the same complete records and card design as Discover, not a reduced profile-only version.
+    allPosts=await getProfileAftermath(currentUser.id);
+  }catch(error){
+    container.innerHTML='<div class="lived-empty"><div class="lived-empty-icon">⚠</div><h3>Could not load</h3><p>Aftermath could not be loaded right now. Please try again.</p></div>';
+    return;
   }
-  allPosts.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const livedAuthor=currentUser.user_metadata?.username?`@${currentUser.user_metadata.username}`:(currentUser.user_metadata?.full_name||'You');
   if(!allPosts.length){
     container.innerHTML=`<div class="lived-header"><div><p class="lived-label">Your stories</p><p class="lived-sub">Share the moments that stayed with you.</p></div><button class="lived-share-button" type="button" data-lived-share>Share a lived event</button></div><div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>Your aftermath starts here</h3><p>Only stories you share from events you attended appear on your profile.</p><div class="lived-events-list">${data.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">Share</button></div>`).join('')}</div></div>`;
     container.querySelector('[data-lived-share]')?.addEventListener('click',()=>openAftermathPlanPicker(data));
@@ -1746,30 +1762,7 @@ async function renderLivedOn(container){
     });
     return;
   }
-  const livedPostsHtml=allPosts.map(post=>{
-    const tags=(post.hashtags||[]).map(h=>`<span class="aftermath-tag">#${escapeHtml(h)}</span>`).join(' ');
-    const mediaHtml=(post.media||[]).map(m=>{
-      if(m.file_type==='image') return `<div class="aftermath-media-item image"><img src="${escapeHtml(m.file_url)}" alt="Event photo" loading="lazy"></div>`;
-      if(m.file_type==='video') return `<div class="aftermath-media-item video"><video src="${escapeHtml(m.file_url)}" controls preload="none"></video></div>`;
-      if(m.file_type==='pdf') return `<a class="aftermath-media-item pdf" href="${escapeHtml(m.file_url)}" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">${escapeHtml(m.file_name||'PDF document')}</span></a>`;
-      return '';
-    }).join('');
-    const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
-    return`<article class="aftermath-card lived-card" data-aftermath-id="${escapeHtml(post.id)}">
-      <button class="aftermath-author-line" type="button" data-public-profile-id="${escapeHtml(currentUser.id)}">${escapeHtml(livedAuthor)}</button>
-      <button class="aftermath-event-context" type="button" data-aftermath-event="${escapeHtml(post.plan_id||'')}" data-event-title="${escapeHtml(post.plan_title||'')}" data-event-location="${escapeHtml(post.plan_location||'')}">
-        <span class="aftermath-event-badge lived">Lived</span>
-        <span class="aftermath-event-info">
-          <span class="aftermath-event-title">${escapeHtml(post.plan_title||'')}</span>
-          ${post.plan_location?`<span class="aftermath-event-loc">\uD83D\uDCCD ${escapeHtml(post.plan_location)}</span>`:''}
-        </span><span class="aftermath-event-arrow" aria-hidden="true">›</span>
-      </button>
-      <div class="aftermath-body">${escapeHtml(post.body)}</div>
-      ${tags?`<div class="aftermath-tags">${tags}</div>`:''}
-      ${mediaHtml?`<div class="aftermath-media ${gridClass}">${mediaHtml}</div>`:''}
-      <div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div>
-    </article>`;
-  }).join('');
+  const livedPostsHtml=renderAftermathCards(allPosts);
   const postedPlanIds=new Set(allPosts.map(post=>post.plan_id));
   const eventsWithout=data.filter(row=>!postedPlanIds.has(row.plan_id));
   let eventsHtml='';
@@ -1781,6 +1774,7 @@ async function renderLivedOn(container){
   container.querySelectorAll('[data-lived-add]').forEach(el=>{
     el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
   });
+  wireAftermathActions();
 }
 let activeAftermathPlanId=null;
 function openAftermathComposer(planId){
