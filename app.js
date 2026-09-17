@@ -1269,6 +1269,10 @@ replaceBrand();
   const scanInput=document.querySelector('#scan-input');
   const scanSubmit=document.querySelector('#scan-submit');
   const scanResult=document.querySelector('#scan-result');
+  const scanResultIcon=document.querySelector('#scan-result-icon');
+  const scanResultTitle=document.querySelector('#scan-result-title');
+  const scanResultDetail=document.querySelector('#scan-result-detail');
+  const scanNext=document.querySelector('#scan-next');
   let activeScanPlanId=null;
   let html5Scanner=null;
   let scanBusy=false;
@@ -1290,21 +1294,42 @@ replaceBrand();
     scanStatus.textContent=text;
     scanStatus.className='scan-status'+(kind?' '+kind:'');
   }
-  function setScanResult(text, kind){
-    scanResult.textContent=text;
+  function setScanResult(title, kind, detail=''){
+    scanResult.hidden=!title;
     scanResult.className='scan-result'+(kind?' '+kind:'');
+    scanResultIcon.textContent=kind==='valid'?'✓':kind==='repeat'?'!':'×';
+    scanResultTitle.textContent=title||'';
+    scanResultDetail.textContent=detail;
+    scanNext.hidden=!title||!kind;
+    scanNext.textContent=kind==='invalid'?'Try another code':'Scan next guest';
+  }
+  function formatCheckedInAt(value){
+    if(!value)return '';
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime()))return '';
+    return ` at ${date.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+  }
+  function scanFailureDetail(reason){
+    const normalized=String(reason||'').toLowerCase();
+    if(normalized.includes('not found'))return 'This QR code is not a valid Evenit entry pass.';
+    if(normalized.includes('only the event host'))return 'This pass belongs to a different event.';
+    if(normalized.includes('no longer active'))return 'This pass is no longer active for check-in.';
+    if(normalized.includes('sign-in'))return 'Sign in as this event’s organizer to check in guests.';
+    return 'We could not verify this pass. Check the code and try again.';
   }
   async function verifyScannedToken(token){
     if(scanBusy) return;
     const clean=extractToken(token);
-    if(!clean){ setScanResult('Enter a pass code first', 'invalid'); return; }
-    if(!supabase||!currentUser){ setScanResult('Host sign-in required', 'invalid'); showToast('Log in as host to verify'); return; }
+    if(!clean){ setScanResult('Check-in failed', 'invalid', 'Enter a pass code or scan a QR code first.'); return; }
+    if(!supabase||!currentUser){ setScanResult('Host sign-in required', 'invalid', 'Sign in as this event’s organizer to check in guests.'); showToast('Log in as host to verify'); return; }
     scanBusy=true;
-    setScanResult('Verifying...', '');
+    setScanResult('Verifying pass…', '', 'Checking this pass securely with Evenit.');
     const {data,error}=await supabase.rpc('verify_entry_pass',{p_entry_token:clean});
     const row=error?{valid:false,reason:error.message}: (Array.isArray(data)?data[0]:data);
     if(row?.valid){
-      setScanResult(`Entry verified: ${row.attendee_name} for ${row.plan_title}`, 'valid');
+      const guest=row.attendee_name||'This guest';
+      setScanResult('Check-in successful', 'valid', `${guest} is checked in for ${row.plan_title||'this event'}.`);
+      setScanStatus('Check-in saved · ready for the next guest', 'valid');
       showToast(`Checked in ${row.attendee_name} \u2713`);
       await loadEntryPasses();
       if(!isScanPageActive()){
@@ -1314,10 +1339,20 @@ replaceBrand();
       }
     }else{
       const reason=row?.reason||'Pass could not be verified';
-      setScanResult(reason, 'invalid');
-      showToast(reason);
-      if(row?.plan_id) setScanStatus(`Last check: ${reason}`, 'invalid');
+      const alreadyCheckedIn=reason.toLowerCase().includes('already checked in');
+      if(alreadyCheckedIn){
+        const guest=row.attendee_name||'This guest';
+        setScanResult('Already checked in', 'repeat', `${guest} was checked in${formatCheckedInAt(row.checked_in_at)}. No new check-in was recorded.`);
+        setScanStatus('Pass used previously · no change made', 'repeat');
+        showToast(`${guest} is already checked in`);
+      }else{
+        const detail=scanFailureDetail(reason);
+        setScanResult('Check-in failed', 'invalid', detail);
+        setScanStatus('No check-in recorded · try another code', 'invalid');
+        showToast('Check-in failed');
+      }
     }
+    await stopScanner();
     scanBusy=false;
   }
   async function startScanner(){
@@ -1427,6 +1462,11 @@ replaceBrand();
   scanModal.querySelector('#close-scan').onclick=()=>closeScanModal();
   scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
+  scanNext.onclick=()=>{
+    scanInput.value='';
+    setScanResult('', '');
+    startScanner();
+  };
   scanInput.addEventListener('keydown', event=>{ if(event.key==='Enter'){ event.preventDefault(); verifyScannedToken(scanInput.value); } });
 
  function showEntryVerification(result){
