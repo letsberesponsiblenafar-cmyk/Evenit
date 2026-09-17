@@ -43,6 +43,7 @@ window.addEventListener('popstate',event=>{
   if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});
   if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}
   if(view.type==='public-profile')renderPublicProfile(view.profileId,{restore:true});
+  if(view.type==='public-profile-list')openPublicProfileConnectionList(view.profileId,view.list,{restore:true});
   if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});
 });
 function goHome(){
@@ -1005,7 +1006,16 @@ async function renderPublicProfile(profileId){
   }
 }
 async function openDirectConversation(profile){
-  if(!supabase||!currentUser){showToast('Log in to message');return;}
+  if(!supabase){showToast('Messages are unavailable while the live connection is offline.');return;}
+  try{
+    await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
+  }catch(error){
+    currentUser=null;
+    updateAccountUI();
+    loginModal?.classList.add('open');
+    showToast(error?.message||'Log in to message this profile.');
+    return;
+  }
   pushNav('messages');showInsightsShell();
   pageView.innerHTML='<div class="direct-message-page"><button class="back-link" id="back-from-direct-message">← Messages</button><div class="direct-message-heading"><img src="'+escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><p class="overline">Direct message</p><h2>'+escapeHtml(profile.full_name||profile.username||'Evenit member')+'</h2><p>@'+escapeHtml(profile.username||'member')+'</p></div></div><div class="direct-thread" id="direct-thread"><p>Loading conversation…</p></div><form class="direct-message-form" id="direct-message-form"><input name="body" maxlength="1000" placeholder="Write a message…" required><button class="publish-button" type="submit">Send <span>→</span></button></form></div>';
   document.querySelector('#back-from-direct-message').onclick=()=>setPage('messages');
@@ -1015,7 +1025,36 @@ async function openDirectConversation(profile){
   await loadThread();
   document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await loadThread();};
 }
-async function loadPublicAftermath(profileId){const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);if(!target||!supabase)return;const {data,error}=await supabase.from('plan_aftermath_posts').select('id,body,hashtags,created_at,plan_id').eq('author_id',profileId).order('created_at',{ascending:false}).limit(20);if(target.dataset.aftermathProfile!==profileId)return;if(error||!data?.length){target.innerHTML='<div class="lived-events-label">Lived On</div><div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';return;}const cards=data.map(post=>`<article class="aftermath-card lived-card"><div class="aftermath-body">${escapeHtml(post.body)}</div>${post.hashtags?.length?`<div class="aftermath-tags">${post.hashtags.map(tag=>`<span class="aftermath-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`:''}<div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div></article>`).join('');target.innerHTML='<div class="lived-events-label">Lived On</div>'+cards;}
+async function loadPublicAftermath(profileId){const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);if(!target||!supabase)return;const {data,error}=await supabase.from('plan_aftermath_posts').select('id,body,hashtags,created_at,plan_id').eq('author_id',profileId).order('created_at',{ascending:false}).limit(20);if(target.dataset.aftermathProfile!==profileId)return;if(error||!data?.length){target.innerHTML='<div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';return;}const cards=data.map(post=>`<article class="aftermath-card lived-card"><div class="aftermath-body">${escapeHtml(post.body)}</div>${post.hashtags?.length?`<div class="aftermath-tags">${post.hashtags.map(tag=>`<span class="aftermath-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`:''}<div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div></article>`).join('');target.innerHTML=cards;}
+
+async function openPublicProfileConnectionList(profileId,list,{restore=false}={}){
+  if(!supabase||!profileId)return;
+  const kind=list==='following'?'following':'followers';
+  if(!restore)pushAppView({type:'public-profile-list',profileId,list:kind});
+  setInsightsDockScan(null);
+  updateMobileHeader('profile');
+  showInsightsShell();
+  pageView.className='page-view public-profile-page-refined';
+  pageView.dataset.publicProfileId=profileId;
+  const heading=kind==='followers'?'Followers':'Following';
+  pageView.innerHTML=`<section class="public-profile-page public-profile-connections" data-viewed-profile="${escapeHtml(profileId)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile-list" aria-label="Go back">←</button><strong>${heading}</strong><span aria-hidden="true"></span></header><div class="public-profile-loading"><p class="overline">Profile connections</p><h2>Loading ${heading.toLowerCase()}…</h2></div></section>`;
+  const relationColumn=kind==='followers'?'following_id':'follower_id';
+  const personColumn=kind==='followers'?'follower_id':'following_id';
+  const [profileResult,relationResult]=await Promise.all([
+    supabase.rpc('get_public_profile',{p_user_id:profileId}),
+    supabase.from('user_follows').select(`${personColumn},created_at`).eq(relationColumn,profileId).order('created_at',{ascending:false})
+  ]);
+  if(pageView.querySelector('.public-profile-connections')?.dataset.viewedProfile!==profileId)return;
+  const ids=(relationResult.data||[]).map(row=>row[personColumn]).filter(Boolean);
+  const peopleResult=ids.length?await supabase.rpc('get_public_profiles',{p_user_ids:ids}):{data:[]};
+  if(pageView.querySelector('.public-profile-connections')?.dataset.viewedProfile!==profileId)return;
+  const peopleById=new Map((peopleResult.data||[]).map(person=>[person.id,person]));
+  const people=ids.map(id=>peopleById.get(id)).filter(Boolean);
+  const owner=profileResult.data||{};
+  const ownerName=owner.full_name||owner.username||'This profile';
+  pageView.innerHTML=`<section class="public-profile-page public-profile-connections" data-viewed-profile="${escapeHtml(profileId)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile-list" aria-label="Go back">←</button><strong>${heading}</strong><span aria-hidden="true"></span></header><div class="public-connections-heading"><p class="overline">${escapeHtml(ownerName)}</p><h2>${heading}</h2><p>${people.length?`${people.length} ${people.length===1?'person':'people'}`:`No ${heading.toLowerCase()} yet.`}</p></div><div class="public-connection-list">${people.length?people.map(person=>`<button type="button" class="public-connection-card" data-public-profile-id="${escapeHtml(person.id)}"><img src="${escapeHtml(person.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(person.full_name||person.username||'Evenit member')}"><span><strong>${escapeHtml(person.full_name||person.username||'Evenit member')}</strong><small>@${escapeHtml(person.username||'member')}${person.neighborhood?` · ${escapeHtml(person.neighborhood)}`:''}</small></span><b>View</b></button>`).join(''):`<div class="public-profile-empty">When people connect with this profile, they’ll appear here.</div>`}</div></section>`;
+  pageView.querySelector('#back-from-profile-list')?.addEventListener('click',goBack);
+}
 
 async function loadPublicProfilePlans(profile){
   const localPlans=posts.filter(post=>post.user_id===profile.id);
@@ -1074,7 +1113,7 @@ renderPublicProfile=async function(profileId,{restore=false}={}){
   followState=followStateResult.data?.status||'none';
   const isPrivate=Boolean(profile.is_private);
   const canViewActivity=!isPrivate||followState==='following';
-  const followerCount=followersResult.count||0;
+  let followerCount=followersResult.count||0;
   const followingCount=followingResult.count||0;
   const now=Date.now();
   const planCards=publicPlans.map(post=>{
@@ -1086,18 +1125,35 @@ renderPublicProfile=async function(profileId,{restore=false}={}){
     return `<article class="public-plan-card" data-public-plan-card="${escapeHtml(post.id)}"><div class="public-plan-card-art ${escapeHtml(post.image||'pic-one')}"><span>${escapeHtml(post.category||'Event')}</span><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="public-plan-card-body"><p class="public-plan-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>${post.caption?`<p class="public-plan-caption">${escapeHtml(post.caption)}</p>`:''}${requirement&&!isMember?`<span class="public-plan-requirement">${escapeHtml(requirement.label)}</span>`:''}<div class="public-plan-actions"><button type="button" class="public-plan-interest" data-public-plan-interest="${escapeHtml(post.id)}" ${disabled?'disabled':''}>${actionLabel}</button>${!disabled?`<button type="button" class="public-plan-dismiss" data-public-plan-dismiss="${escapeHtml(post.id)}">Not interested</button>`:''}</div></div></article>`;
   }).join('');
   const actions=`<div class="public-profile-actions"><button type="button" class="follow-btn" data-profile-follow="${escapeHtml(profile.id)}">${followState==='following'?'Following':followState==='pending'?'Requested':'Follow'}</button><button type="button" class="message-profile-btn" data-profile-message="${escapeHtml(profile.id)}" ${isPrivate&&followState!=='following'?'hidden':''}>Message</button></div>`;
-  const activity=canViewActivity?`<section class="public-profile-section public-profile-plans"><div class="public-profile-section-heading"><h3>Public plans</h3><span>${publicPlans.length}</span></div><div class="public-profile-plan-list">${planCards||'<div class="public-profile-empty">No public plans yet.</div>'}</div></section><section class="public-aftermath" data-aftermath-profile="${escapeHtml(profile.id)}"><div class="lived-events-label">Lived On</div><div class="lived-loading">Loading their aftermath…</div></section>`:`<section class="public-profile-private-note"><span>◌</span><div><strong>This profile is private</strong><p>Follow this person to see the plans and moments they choose to share.</p></div></section>`;
-  pageView.innerHTML=`<section class="public-profile-page public-profile-page-refined" data-viewed-profile="${escapeHtml(profile.id)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>@${escapeHtml(profile.username||'member')}</strong><span aria-hidden="true"></span></header><section class="public-profile-identity"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt="${escapeHtml(profile.full_name||profile.username||'Evenit member')}"><div><h2>${escapeHtml(profile.full_name||profile.username||'Evenit member')}</h2><p>@${escapeHtml(profile.username||'member')}</p></div></section><div class="public-profile-stats" aria-label="Profile stats"><span><strong>${publicPlans.length||profile.plans_posted||0}</strong>Events created</span><span><strong>${followerCount}</strong>Followers</span><span><strong>${followingCount}</strong>Following</span></div>${actions}${canViewActivity?`<section class="public-profile-about"><h3>About</h3><p>${profile.about?escapeHtml(profile.about):'No About shared yet.'}</p></section>`:''}${activity}</section>`;
+  const activity=canViewActivity?`<section class="public-profile-activity" aria-label="Profile activity"><div class="public-profile-tabs" role="tablist" aria-label="Profile activity"><button type="button" class="active" role="tab" aria-selected="true" data-public-profile-tab="plans">Public plans <span>${publicPlans.length}</span></button><button type="button" role="tab" aria-selected="false" data-public-profile-tab="lived">Lived On</button></div><div class="public-profile-activity-stage" data-public-profile-stage><section class="public-profile-pane" data-public-profile-pane="plans"><div class="public-profile-plan-list">${planCards||'<div class="public-profile-empty">No public plans yet.</div>'}</div></section><section class="public-profile-pane" data-public-profile-pane="lived" hidden><div class="public-aftermath" data-aftermath-profile="${escapeHtml(profile.id)}"><div class="lived-loading">Loading their aftermath…</div></div></section></div></section>`:`<section class="public-profile-private-note"><span>◌</span><div><strong>This profile is private</strong><p>Follow this person to see the plans and moments they choose to share.</p></div></section>`;
+  pageView.innerHTML=`<section class="public-profile-page public-profile-page-refined" data-viewed-profile="${escapeHtml(profile.id)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>@${escapeHtml(profile.username||'member')}</strong><span aria-hidden="true"></span></header><section class="public-profile-identity"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt="${escapeHtml(profile.full_name||profile.username||'Evenit member')}"><div><h2>${escapeHtml(profile.full_name||profile.username||'Evenit member')}</h2><p>@${escapeHtml(profile.username||'member')}</p></div></section><div class="public-profile-stats" aria-label="Profile stats"><button type="button" data-public-profile-stat="plans"><strong>${publicPlans.length||profile.plans_posted||0}</strong>Events created</button><button type="button" data-public-profile-stat="followers"><strong data-public-follower-count>${followerCount}</strong>Followers</button><button type="button" data-public-profile-stat="following"><strong>${followingCount}</strong>Following</button></div>${actions}${canViewActivity?`<section class="public-profile-about"><h3>About</h3><p>${profile.about?escapeHtml(profile.about):'No About shared yet.'}</p></section>`:''}${activity}</section>`;
   pageView.querySelector('#back-from-profile')?.addEventListener('click',goBack);
   if(canViewActivity)loadPublicAftermath(profile.id);
+  const activateActivityTab=(tab,{motion=false}={})=>{
+    if(!canViewActivity)return;
+    const selected=tab==='lived'?'lived':'plans';
+    pageView.querySelectorAll('[data-public-profile-tab]').forEach(button=>{const active=button.dataset.publicProfileTab===selected;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));});
+    pageView.querySelectorAll('[data-public-profile-pane]').forEach(pane=>{pane.hidden=pane.dataset.publicProfilePane!==selected;});
+    const stage=pageView.querySelector('[data-public-profile-stage]');
+    if(motion&&stage){stage.classList.remove('is-switching');void stage.offsetWidth;stage.classList.add('is-switching');}
+  };
+  pageView.querySelectorAll('[data-public-profile-tab]').forEach(button=>button.addEventListener('click',()=>activateActivityTab(button.dataset.publicProfileTab,{motion:true})));
+  const activityStage=pageView.querySelector('[data-public-profile-stage]');
+  let swipeStart=null;
+  activityStage?.addEventListener('pointerdown',event=>{swipeStart={x:event.clientX,y:event.clientY};});
+  activityStage?.addEventListener('pointerup',event=>{if(!swipeStart)return;const deltaX=event.clientX-swipeStart.x;const deltaY=event.clientY-swipeStart.y;swipeStart=null;if(Math.abs(deltaX)<54||Math.abs(deltaX)<Math.abs(deltaY))return;if(deltaX>0)activateActivityTab('lived',{motion:true});else activateActivityTab('plans',{motion:true});});
+  activityStage?.addEventListener('pointercancel',()=>{swipeStart=null;});
+  pageView.querySelector('[data-public-profile-stat="plans"]')?.addEventListener('click',()=>{activateActivityTab('plans',{motion:true});activityStage?.scrollIntoView({behavior:'smooth',block:'start'});});
+  pageView.querySelector('[data-public-profile-stat="followers"]')?.addEventListener('click',()=>openPublicProfileConnectionList(profile.id,'followers'));
+  pageView.querySelector('[data-public-profile-stat="following"]')?.addEventListener('click',()=>openPublicProfileConnectionList(profile.id,'following'));
   const followButton=pageView.querySelector('[data-profile-follow]');
   const messageButton=pageView.querySelector('[data-profile-message]');
   const setFollowState=state=>{followState=state;followButton.textContent=state==='following'?'Following':state==='pending'?'Requested':'Follow';followButton.classList.toggle('following',state==='following');followButton.classList.toggle('requested',state==='pending');if(messageButton)messageButton.hidden=isPrivate&&state!=='following';};
   setFollowState(followState);
-  followButton?.addEventListener('click',async()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to follow this profile');return;}followButton.disabled=true;const {data,error}=await supabase.rpc('toggle_follow',{p_following_id:profile.id});followButton.disabled=false;if(error||data?.error){showToast(data?.error||error?.message||'Could not update this follow');return;}if(data.status==='followed'){setFollowState('following');showToast('Following ✓');}else if(data.status==='requested'){setFollowState('pending');showToast('Follow request sent');}else{setFollowState('none');showToast(data.status==='request_cancelled'?'Follow request cancelled':'Unfollowed');}});
-  messageButton?.addEventListener('click',()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to message this profile');return;}openDirectConversation(profile);});
+  followButton?.addEventListener('click',async()=>{try{await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');followButton.disabled=true;const {data,error}=await withEvenitTimeout(supabase.rpc('toggle_follow',{p_following_id:profile.id}),12000,'The follow request took too long. Please try again.');if(error||data?.error)throw new Error(data?.error||error?.message||'Could not update this follow');if(data.status==='followed'){followerCount+=1;setFollowState('following');showToast('Following ✓');}else if(data.status==='requested'){setFollowState('pending');showToast('Follow request sent');}else{if(data.status==='unfollowed')followerCount=Math.max(0,followerCount-1);setFollowState('none');showToast(data.status==='request_cancelled'?'Follow request cancelled':'Unfollowed');}const count=pageView.querySelector('[data-public-follower-count]');if(count)count.textContent=followerCount;}catch(error){if(/login expired|not logged in/i.test(error?.message||'')){currentUser=null;updateAccountUI();loginModal?.classList.add('open');}showToast(error?.message||'Could not update this follow.');}finally{if(followButton.isConnected)followButton.disabled=false;}});
+  messageButton?.addEventListener('click',()=>openDirectConversation(profile));
   const plansById=new Map(publicPlans.map(plan=>[plan.id,plan]));
-  pageView.querySelectorAll('[data-public-plan-interest]').forEach(button=>button.addEventListener('click',()=>requestPlanInterest(plansById.get(button.dataset.publicPlanInterest),button)));
+  pageView.querySelectorAll('[data-public-plan-interest]').forEach(button=>button.addEventListener('click',event=>{event.preventDefault();requestPlanInterest(plansById.get(button.dataset.publicPlanInterest),button);}));
   pageView.querySelectorAll('[data-public-plan-dismiss]').forEach(button=>button.addEventListener('click',async()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to refine your recommendations');return;}const post=plansById.get(button.dataset.publicPlanDismiss);if(!post)return;button.disabled=true;const {error}=await supabase.from('plan_swipes').upsert({plan_id:post.id,user_id:currentUser.id,interested:false},{onConflict:'plan_id,user_id'});if(error){button.disabled=false;showToast(`Could not update this event: ${error.message}`);return;}post.swipeInterest=false;post.interested=false;button.closest('[data-public-plan-card]')?.remove();showToast('Not interested — we will show you less like this.');}));
 };
 	 document.addEventListener('click',e=>{const insights=e.target.closest('[data-insights-id]');if(insights){e.preventDefault();e.stopImmediatePropagation();renderInsights(insights.dataset.insightsId);return}const profile=e.target.closest('[data-public-profile-id],[data-profile-id]');if(profile&&profile.dataset.profileId||profile&&profile.dataset.publicProfileId){e.preventDefault();e.stopImmediatePropagation();renderPublicProfile(profile.dataset.publicProfileId||profile.dataset.profileId)}},true);
@@ -2007,7 +2063,16 @@ async function completePlanInterest(post,button,answers=null){
 async function requestPlanInterest(post,button,afterRequest){
   if(!post)return false;
   if(post.membershipStatus==='confirmed'||post.membershipStatus==='waitlisted'||post.membershipStatus==='interested')return true;
-  if(!supabase||!currentUser){showToast('Log in to show interest in this event');loginModal?.classList.add('open');return false;}
+  if(!supabase){showToast('The live event connection is unavailable. Reopen Evenit while online.');return false;}
+  try{
+    await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
+  }catch(error){
+    currentUser=null;
+    updateAccountUI();
+    loginModal?.classList.add('open');
+    showToast(error?.message||'Log in to show interest in this event.');
+    return false;
+  }
   return openPlanRequestPage(post,{afterRequest});
 }
 
