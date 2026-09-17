@@ -50,7 +50,7 @@ function goHome(){
   setInsightsDockScan(null);
   navHistory=[];
   pageView.classList.remove('public-profile-page-refined');
-  delete pageView.dataset.publicProfileId;
+  delete pageView.dataset.publicProfileViewId;
   pageView.hidden=true;
   homeElements.forEach(e=>e.hidden=false);
   document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
@@ -565,7 +565,7 @@ document.querySelectorAll('.share-option').forEach(b=>b.onclick=async()=>{
 });document.querySelectorAll('.comment').forEach(btn=>btn.onclick=()=>addPlanComment(btn.dataset.index));document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));document.querySelectorAll('.more').forEach(btn=>btn.onclick=()=>showToast('More event actions are coming next ✦'));document.querySelectorAll('.post-visual[data-plan-id]').forEach(visual=>visual.onclick=()=>recordPlanInteraction(visual.dataset.planId,'click'));trackPostImpressions()}
 renderPosts();
 const pageView=document.querySelector('#page-view');
-const isPublicProfileOpen=()=>Boolean(pageView?.dataset.publicProfileId&&pageView.querySelector('.public-profile-page'));
+const isPublicProfileOpen=()=>Boolean(pageView?.dataset.publicProfileViewId&&pageView.querySelector('.public-profile-page'));
 const homeElements=[document.querySelector('.feed-top'),document.querySelector('.stories'),postsEl];
 function loadPlansPreservingHostWorkspace(){
   if(!pageView?.querySelector('.host-approval-insights,.host-request-review'))return loadPlans();
@@ -886,7 +886,7 @@ function setPage(page){const from=!pageView.hidden?(document.querySelector('[dat
 const evenitSetPage=setPage;
 setPage=function(page){
   pageView.classList.remove('public-profile-page-refined');
-  delete pageView.dataset.publicProfileId;
+  delete pageView.dataset.publicProfileViewId;
   evenitSetPage(page);
   if(page==='home'){
     // render the plan board after any previous aftermath refresh resolves
@@ -1036,7 +1036,7 @@ async function openPublicProfileConnectionList(profileId,list,{restore=false}={}
   updateMobileHeader('profile');
   showInsightsShell();
   pageView.className='page-view public-profile-page-refined';
-  pageView.dataset.publicProfileId=profileId;
+  pageView.dataset.publicProfileViewId=profileId;
   const heading=kind==='followers'?'Followers':'Following';
   pageView.innerHTML=`<section class="public-profile-page public-profile-connections" data-viewed-profile="${escapeHtml(profileId)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile-list" aria-label="Go back">←</button><strong>${heading}</strong><span aria-hidden="true"></span></header><div class="public-profile-loading"><p class="overline">Profile connections</p><h2>Loading ${heading.toLowerCase()}…</h2></div></section>`;
   const relationColumn=kind==='followers'?'following_id':'follower_id';
@@ -1097,7 +1097,7 @@ renderPublicProfile=async function(profileId,{restore=false}={}){
   updateMobileHeader('profile');
   showInsightsShell();
   pageView.className='page-view public-profile-page-refined';
-  pageView.dataset.publicProfileId=profileId;
+  pageView.dataset.publicProfileViewId=profileId;
   pageView.innerHTML='<section class="public-profile-page public-profile-page-refined" data-viewed-profile="'+escapeHtml(profileId)+'"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>Profile</strong><span aria-hidden="true"></span></header><div class="public-profile-loading"><p class="overline">Profile</p><h2>Loading profile...</h2></div></section>';
   const profileResult=await supabase.rpc('get_public_profile',{p_user_id:profileId});
   if(pageView.querySelector('.public-profile-page')?.dataset.viewedProfile!==profileId)return;
