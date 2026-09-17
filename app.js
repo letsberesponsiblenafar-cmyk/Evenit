@@ -21,7 +21,16 @@ function insightsReturnState(planId){return{...(window.history.state||{}),evenit
 function insightsUrl(planId){const url=new URL(window.location.href);url.hash=`insights/${encodeURIComponent(planId)}`;return url.href}
 function pushHostWorkspaceView(view){const state=insightsReturnState(view.planId);const url=insightsUrl(view.planId);window.history.replaceState(state,'',url);window.history.pushState({...state,evenitAppView:view},'',url)}
 function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
-window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});if(view.type==='host-scan')openScanModal(view.planId,{restore:true});});
+window.addEventListener('popstate',event=>{
+  const view=event.state?.evenitAppView;
+  if(view?.type==='host-scan'){openScanModal(view.planId,{restore:true});return;}
+  if(scanModal?.classList.contains('open'))closeScanModal({returnToInsights:false});
+  if(!view)return;
+  if(view.type==='agenda')showJoinedPage({restore:true});
+  if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});
+  if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}
+  if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});
+});
 function goHome(){
   setInsightsDockScan(null);
   navHistory=[];
@@ -1065,6 +1074,7 @@ replaceBrand();
   let activeScanPlanId=null;
   let html5Scanner=null;
   let scanBusy=false;
+  let scanSession=0;
   function extractToken(raw){
     if(!raw) return '';
     const value=String(raw).trim();
@@ -1111,6 +1121,7 @@ replaceBrand();
     scanBusy=false;
   }
   async function startScanner(){
+    const session=++scanSession;
     setScanStatus('Starting camera...', '');
     setScanResult('', '');
     if(!window.Html5Qrcode){
@@ -1122,28 +1133,36 @@ replaceBrand();
         try{ await html5Scanner.stop(); }catch(e){}
         try{ html5Scanner.clear(); }catch(e){}
       }
-      html5Scanner=new window.Html5Qrcode('scan-reader');
-      await html5Scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:250}}, async decoded=>{
+      const scanner=new window.Html5Qrcode('scan-reader');
+      html5Scanner=scanner;
+      await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:250}}, async decoded=>{
         await verifyScannedToken(decoded);
       }, ()=>{});
+      if(session!==scanSession||!scanModal.classList.contains('open')||html5Scanner!==scanner){
+        try{await scanner.stop();}catch(e){}
+        try{scanner.clear();}catch(e){}
+        return;
+      }
       setScanStatus('Camera active \u00b7 point at guest QR', 'valid');
     }catch(err){
       setScanStatus(err?.message||'Camera not available', 'invalid');
     }
   }
   async function stopScanner(){
-    if(html5Scanner){
-      try{ await html5Scanner.stop(); }catch(e){}
-      try{ html5Scanner.clear(); }catch(e){}
-      html5Scanner=null;
-    }
+    scanSession++;
+    const scanner=html5Scanner;
+    html5Scanner=null;
     setScanStatus('Camera idle', '');
+    if(!scanner)return;
+    const stop=Promise.resolve(scanner.stop()).catch(()=>{});
+    await Promise.race([stop,new Promise(resolve=>setTimeout(resolve,450))]);
+    try{scanner.clear();}catch(e){}
   }
   async function closeScanModal({returnToInsights=true}={}){
     const planId=activeScanPlanId;
-    await stopScanner();
-    scanModal.classList.remove('open');
     activeScanPlanId=null;
+    scanModal.classList.remove('open');
+    void stopScanner();
     if(returnToInsights&&window.history.state?.evenitAppView?.type==='host-scan'){
       window.history.back();
       return;
@@ -2094,28 +2113,36 @@ renderInsights=async function(planId){
 // Host approvals are a dedicated review workspace. The assignment below is
 // intentionally the final Insights renderer used by every host entry point.
 function setInsightsDockScan(planId=null){
-  const dock=document.querySelector('.mobile-dock button[data-dock-create],.mobile-dock button[data-insights-scan]');
-  if(!dock)return;
-  const icon=dock.querySelector('span');
-  const label=dock.querySelector('small');
-  if(planId){
-    if(!dock.dataset.createLabel)dock.dataset.createLabel=label?.textContent.trim()||'Create';
-    dock.dataset.insightsScan=planId;
-    dock.removeAttribute('data-dock-create');
-    dock.removeAttribute('onclick');
-    if(icon)icon.textContent='▣';
-    if(label)label.textContent='Scan';
-    dock.setAttribute('aria-label','Scan an event pass');
-    dock.onclick=event=>{event.preventDefault();event.stopPropagation();openScanModal(planId);};
-    return;
-  }
-  if(!dock.dataset.insightsScan)return;
-  delete dock.dataset.insightsScan;
-  dock.setAttribute('data-dock-create','');
-  if(icon)icon.textContent='＋';
-  if(label)label.textContent=dock.dataset.createLabel||'Create';
-  dock.setAttribute('aria-label','Create a plan');
-  dock.onclick=()=>document.querySelector('#open-modal')?.click();
+  const controls=[
+    document.querySelector('.mobile-dock button[data-dock-create],.mobile-dock button[data-insights-scan]'),
+    document.querySelector('#open-modal')
+  ].filter(Boolean);
+  controls.forEach(control=>{
+    const mobile=control.closest('.mobile-dock');
+    const icon=control.querySelector('span');
+    const label=control.querySelector('small');
+    if(planId){
+      if(!control.dataset.createHtml)control.dataset.createHtml=control.innerHTML;
+      control.dataset.insightsScan=planId;
+      control.setAttribute('data-insights-scan',planId);
+      control.removeAttribute('data-dock-create');
+      control.removeAttribute('onclick');
+      control.classList.add('host-scan-control');
+      if(mobile){
+        if(icon)icon.textContent='▣';
+        if(label)label.textContent='Scan';
+      }else control.innerHTML='▣ <span>Scan pass</span>';
+      control.setAttribute('aria-label','Scan an event pass');
+      return;
+    }
+    if(!control.dataset.insightsScan)return;
+    delete control.dataset.insightsScan;
+    control.removeAttribute('data-insights-scan');
+    control.classList.remove('host-scan-control');
+    control.innerHTML=control.dataset.createHtml||control.innerHTML;
+    if(mobile)control.setAttribute('data-dock-create','');
+    control.setAttribute('aria-label','Create a plan');
+  });
 }
 
 async function loadHostVerificationDetails(planId){
@@ -2355,6 +2382,13 @@ function openWorkspace(kind,{restore=false}={}){
 }
 
 document.addEventListener('click',event=>{
+  const scanTrigger=event.target.closest('[data-insights-scan]');
+  if(scanTrigger){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    openScanModal(scanTrigger.dataset.insightsScan);
+    return;
+  }
   const editTrigger=event.target.closest('.edit-profile');
   const planTrigger=event.target.closest('#open-modal,#open-modal-header,#open-modal-mobile,[data-dock-create],.add-story,#profile-post,.topbar-plus');
   if(!editTrigger&&!planTrigger)return;
@@ -2557,7 +2591,8 @@ document.addEventListener('click',event=>{
 // explicitly keep it in sync whenever navigation changes pages.
 const profileAwareSetPage=setPage;
 setPage=function(page){
-  setInsightsDockScan(null);
+  const restoringInsights=page==='profile'&&window.history.state?.evenitNavigation&&window.history.state?.route?.kind==='insights';
+  if(!restoringInsights)setInsightsDockScan(null);
   document.querySelector('#pulse-bar')?.toggleAttribute('hidden',page!=='home');
   profileAwareSetPage(page);
 };
