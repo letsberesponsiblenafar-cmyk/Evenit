@@ -1294,6 +1294,20 @@ replaceBrand();
     scanStatus.textContent=text;
     scanStatus.className='scan-status'+(kind?' '+kind:'');
   }
+  function setScanPageOutcome(title='', kind='', detail=''){
+    const note=pageView.querySelector('#scan-page-note');
+    if(!note)return;
+    const icon=note.querySelector('#scan-page-note-icon');
+    const heading=note.querySelector('#scan-page-note-title');
+    const copy=note.querySelector('#scan-page-note-detail');
+    const next=note.querySelector('#scan-page-next');
+    note.className='scan-page-note'+(kind?' '+kind:'');
+    icon.textContent=kind==='valid'?'✓':kind==='repeat'?'!':kind==='invalid'?'×':'▣';
+    heading.textContent=title||'Ready to check in guests';
+    copy.textContent=detail||'Use the camera or enter a pass code. Each pass can be checked in once.';
+    next.hidden=!title||!kind;
+    next.textContent=kind==='invalid'?'Try another code':'Scan next guest';
+  }
   function setScanResult(title, kind, detail=''){
     scanResult.hidden=!title;
     scanResult.className='scan-result'+(kind?' '+kind:'');
@@ -1302,6 +1316,7 @@ replaceBrand();
     scanResultDetail.textContent=detail;
     scanNext.hidden=!title||!kind;
     scanNext.textContent=kind==='invalid'?'Try another code':'Scan next guest';
+    setScanPageOutcome(title,kind,detail);
   }
   function formatCheckedInAt(value){
     if(!value)return '';
@@ -1316,6 +1331,14 @@ replaceBrand();
     if(normalized.includes('no longer active'))return 'This pass is no longer active for check-in.';
     if(normalized.includes('sign-in'))return 'Sign in as this event’s organizer to check in guests.';
     return 'We could not verify this pass. Check the code and try again.';
+  }
+  function cameraFailureDetail(error){
+    const name=String(error?.name||'').toLowerCase();
+    const message=String(error?.message||'').toLowerCase();
+    if(name.includes('notallowed')||name.includes('security')||message.includes('permission'))return 'Allow camera access for Evenit in your device settings, then try again.';
+    if(name.includes('notfound')||message.includes('no camera')||message.includes('no devices'))return 'No camera was found on this device. You can still verify a pass code manually.';
+    if(name.includes('notreadable')||message.includes('in use'))return 'Your camera is busy in another app. Close that app, then try again.';
+    return 'We could not start the camera. Check camera permission and try again.';
   }
   async function verifyScannedToken(token){
     if(scanBusy) return;
@@ -1359,8 +1382,9 @@ replaceBrand();
     const session=++scanSession;
     setScanStatus('Starting camera...', '');
     setScanResult('', '');
-    if(!window.Html5Qrcode){
+    if(!window.Html5Qrcode||!navigator.mediaDevices?.getUserMedia){
       setScanStatus('Camera scanner unavailable, use paste field', 'invalid');
+      setScanResult('Camera unavailable', 'invalid', 'This device does not support in-app camera scanning. You can still verify a pass code manually.');
       return;
     }
     try{
@@ -1370,9 +1394,19 @@ replaceBrand();
       }
       const scanner=new window.Html5Qrcode('scan-reader');
       html5Scanner=scanner;
-      await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:250}}, async decoded=>{
+      const scannerConfig={fps:10,qrbox:{width:250,height:250}};
+      const onDecoded=async decoded=>{
         await verifyScannedToken(decoded);
-      }, ()=>{});
+      };
+      try{
+        await scanner.start({facingMode:{ideal:'environment'}},scannerConfig,onDecoded,()=>{});
+      }catch(preferredCameraError){
+        let cameras=[];
+        try{cameras=await window.Html5Qrcode.getCameras();}catch(e){throw preferredCameraError;}
+        const fallbackCamera=cameras.find(camera=>/back|rear|environment/i.test(camera.label||''))||cameras[0];
+        if(!fallbackCamera)throw preferredCameraError;
+        await scanner.start(fallbackCamera.id,scannerConfig,onDecoded,()=>{});
+      }
       if(session!==scanSession||(!scanModal.classList.contains('open')&&!isScanPageActive())||html5Scanner!==scanner){
         try{await scanner.stop();}catch(e){}
         try{scanner.clear();}catch(e){}
@@ -1380,7 +1414,12 @@ replaceBrand();
       }
       setScanStatus('Camera active \u00b7 point at guest QR', 'valid');
     }catch(err){
+      if(html5Scanner){
+        try{html5Scanner.clear();}catch(e){}
+        html5Scanner=null;
+      }
       setScanStatus(err?.message||'Camera not available', 'invalid');
+      setScanResult('Camera unavailable', 'invalid', cameraFailureDetail(err));
     }
   }
   async function stopScanner(){
@@ -1436,13 +1475,14 @@ replaceBrand();
     homeElements.forEach(element=>element.hidden=true);
     pageView.hidden=false;
     setScanPageNavigation();
-    pageView.innerHTML=`<section class="scan-page scan-page-live"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>${escapeHtml(plan.title)}</h2><p>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</p></div><button type="button" class="scan-page-close" id="close-scan-page">Done</button></header><div class="scan-page-note"><span>▣</span><p><strong>Ready to check in guests.</strong><small>Use the camera or enter a pass code. Each pass can be checked in once.</small></p></div><div id="scan-page-mount"></div></section>`;
+    pageView.innerHTML=`<section class="scan-page scan-page-live"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>${escapeHtml(plan.title)}</h2><p>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</p></div><button type="button" class="scan-page-close" id="close-scan-page">Done</button></header><div class="scan-page-note" id="scan-page-note"><span id="scan-page-note-icon">▣</span><p><strong id="scan-page-note-title">Ready to check in guests</strong><small id="scan-page-note-detail">Use the camera or enter a pass code. Each pass can be checked in once.</small></p><button id="scan-page-next" type="button" hidden>Scan next guest</button></div><div id="scan-page-mount"></div></section>`;
     pageView.querySelector('#scan-page-mount').append(scanSurface);
     scanSurface.classList.add('scan-page-surface');
     scanModal.classList.remove('open');
     scanInput.value='';
     setScanResult('', '');
     pageView.querySelector('#close-scan-page')?.addEventListener('click',()=>closeScanModal());
+    pageView.querySelector('#scan-page-next')?.addEventListener('click',prepareNextScan);
     startScanner();
   }
   async function closeScanModal({returnToInsights=true}={}){
@@ -1462,11 +1502,12 @@ replaceBrand();
   scanModal.querySelector('#close-scan').onclick=()=>closeScanModal();
   scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
-  scanNext.onclick=()=>{
+  function prepareNextScan(){
     scanInput.value='';
     setScanResult('', '');
     startScanner();
-  };
+  }
+  scanNext.onclick=prepareNextScan;
   scanInput.addEventListener('keydown', event=>{ if(event.key==='Enter'){ event.preventDefault(); verifyScannedToken(scanInput.value); } });
 
  function showEntryVerification(result){
