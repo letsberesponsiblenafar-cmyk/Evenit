@@ -1268,6 +1268,7 @@ replaceBrand();
   const scanStatus=document.querySelector('#scan-status');
   const scanInput=document.querySelector('#scan-input');
   const scanSubmit=document.querySelector('#scan-submit');
+  const scanStartCamera=document.querySelector('#scan-start-camera');
   const scanResult=document.querySelector('#scan-result');
   const scanResultIcon=document.querySelector('#scan-result-icon');
   const scanResultTitle=document.querySelector('#scan-result-title');
@@ -1293,6 +1294,11 @@ replaceBrand();
   function setScanStatus(text, kind){
     scanStatus.textContent=text;
     scanStatus.className='scan-status'+(kind?' '+kind:'');
+  }
+  function setScanCameraAction(label, {disabled=false,hidden=false}={}){
+    scanStartCamera.textContent=label;
+    scanStartCamera.disabled=disabled;
+    scanStartCamera.hidden=hidden;
   }
   function setScanPageOutcome(title='', kind='', detail=''){
     const note=pageView.querySelector('#scan-page-note');
@@ -1382,9 +1388,11 @@ replaceBrand();
     const session=++scanSession;
     setScanStatus('Starting camera...', '');
     setScanResult('', '');
+    setScanCameraAction('Starting camera…',{disabled:true});
     if(!window.Html5Qrcode||!navigator.mediaDevices?.getUserMedia){
       setScanStatus('Camera scanner unavailable, use paste field', 'invalid');
       setScanResult('Camera unavailable', 'invalid', 'This device does not support in-app camera scanning. You can still verify a pass code manually.');
+      setScanCameraAction('Try camera again');
       return;
     }
     try{
@@ -1413,6 +1421,7 @@ replaceBrand();
         return;
       }
       setScanStatus('Camera active \u00b7 point at guest QR', 'valid');
+      setScanCameraAction('Camera active',{disabled:true});
     }catch(err){
       if(html5Scanner){
         try{html5Scanner.clear();}catch(e){}
@@ -1420,6 +1429,7 @@ replaceBrand();
       }
       setScanStatus(err?.message||'Camera not available', 'invalid');
       setScanResult('Camera unavailable', 'invalid', cameraFailureDetail(err));
+      setScanCameraAction('Try camera again');
     }
   }
   async function stopScanner(){
@@ -1427,6 +1437,7 @@ replaceBrand();
     const scanner=html5Scanner;
     html5Scanner=null;
     setScanStatus('Camera idle', '');
+    setScanCameraAction('Start camera');
     if(!scanner)return;
     const stop=Promise.resolve(scanner.stop()).catch(()=>{});
     await Promise.race([stop,new Promise(resolve=>setTimeout(resolve,450))]);
@@ -1483,7 +1494,8 @@ replaceBrand();
     setScanResult('', '');
     pageView.querySelector('#close-scan-page')?.addEventListener('click',()=>closeScanModal());
     pageView.querySelector('#scan-page-next')?.addEventListener('click',prepareNextScan);
-    startScanner();
+    setScanStatus('Tap Start camera to scan a guest QR', '');
+    setScanCameraAction('Start camera');
   }
   async function closeScanModal({returnToInsights=true}={}){
     const wasScanPage=isScanPageActive();
@@ -1502,6 +1514,7 @@ replaceBrand();
   scanModal.querySelector('#close-scan').onclick=()=>closeScanModal();
   scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
+  scanStartCamera.onclick=()=>startScanner();
   function prepareNextScan(){
     scanInput.value='';
     setScanResult('', '');
