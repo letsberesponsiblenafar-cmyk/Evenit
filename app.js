@@ -32,15 +32,24 @@ window.addEventListener('popstate',event=>{
   const view=event.state?.evenitAppView;
   if(view?.type==='host-scan-page'){openScanPage(view.planId,{restore:true});return;}
   if(isScanPageActive()||scanModal?.classList.contains('open'))closeScanModal({returnToInsights:false});
-  if(!view)return;
+  if(!view){
+    const route=decodeURIComponent(window.location.hash.replace(/^#/,''))||'home';
+    const page=route.split('/')[0];
+    if(page==='home')goHome();
+    else if(['discover','groups','notifications','messages','profile','saved','settings','scan'].includes(page))setPage(page);
+    return;
+  }
   if(view.type==='agenda')showJoinedPage({restore:true});
   if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});
   if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}
+  if(view.type==='public-profile')renderPublicProfile(view.profileId,{restore:true});
   if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});
 });
 function goHome(){
   setInsightsDockScan(null);
   navHistory=[];
+  pageView.classList.remove('public-profile-page-refined');
+  delete pageView.dataset.publicProfileId;
   pageView.hidden=true;
   homeElements.forEach(e=>e.hidden=false);
   document.querySelectorAll('[data-page]').forEach(l=>l.classList.remove('active'));
@@ -874,6 +883,8 @@ async function doSwipe(interested){
 function setPage(page){const from=!pageView.hidden?(document.querySelector('[data-page].active')?.dataset.page||'home'):null;if(from&&from!==page)pushNav(from);homeElements.forEach(element=>element.hidden=page!=='home');pageView.hidden=page==='home';document.querySelectorAll('[data-page]').forEach(link=>link.classList.toggle('active',link.dataset.page===page));updateMobileHeader(page);if(page==='home'){navHistory=[];loadAftermathFeed();}else{if(page==='profile')renderProfile();else if(page==='discover')renderDiscover();else if(page==='notifications')renderNotifications();else if(page==='saved')renderSavedPage();else if(page==='messages'||page==='groups'){pageView.innerHTML=pageTemplates.messages;loadGroupMessagesPreview();loadGroups();}else pageView.innerHTML=pageTemplates[page]||pageTemplates.settings}window.scrollTo({top:0,behavior:'smooth'})}
 const evenitSetPage=setPage;
 setPage=function(page){
+  pageView.classList.remove('public-profile-page-refined');
+  delete pageView.dataset.publicProfileId;
   evenitSetPage(page);
   if(page==='home'){
     // render the plan board after any previous aftermath refresh resolves
@@ -1004,8 +1015,92 @@ async function openDirectConversation(profile){
   await loadThread();
   document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await loadThread();};
 }
-async function loadPublicAftermath(profileId){const target=document.querySelector('.public-aftermath');if(!target||!supabase)return;const {data,error}=await supabase.from('plan_aftermath_posts').select('id,body,hashtags,created_at,plan_id').eq('author_id',profileId).order('created_at',{ascending:false}).limit(20);if(error||!data?.length){target.innerHTML='<div class="lived-events-label">Lived On</div><div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';return;}const cards=data.map(post=>`<article class="aftermath-card lived-card"><div class="aftermath-body">${escapeHtml(post.body)}</div>${post.hashtags?.length?`<div class="aftermath-tags">${post.hashtags.map(tag=>`<span class="aftermath-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`:''}<div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div></article>`).join('');target.innerHTML='<div class="lived-events-label">Lived On</div>'+cards;}
- document.addEventListener('click',e=>{const insights=e.target.closest('[data-insights-id]');if(insights){e.preventDefault();e.stopImmediatePropagation();renderInsights(insights.dataset.insightsId);return}const profile=e.target.closest('[data-public-profile-id],[data-profile-id]');if(profile&&profile.dataset.profileId||profile&&profile.dataset.publicProfileId){e.preventDefault();e.stopImmediatePropagation();renderPublicProfile(profile.dataset.publicProfileId||profile.dataset.profileId)}},true);
+async function loadPublicAftermath(profileId){const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);if(!target||!supabase)return;const {data,error}=await supabase.from('plan_aftermath_posts').select('id,body,hashtags,created_at,plan_id').eq('author_id',profileId).order('created_at',{ascending:false}).limit(20);if(target.dataset.aftermathProfile!==profileId)return;if(error||!data?.length){target.innerHTML='<div class="lived-events-label">Lived On</div><div class="lived-empty compact"><p>No aftermath shared yet.</p></div>';return;}const cards=data.map(post=>`<article class="aftermath-card lived-card"><div class="aftermath-body">${escapeHtml(post.body)}</div>${post.hashtags?.length?`<div class="aftermath-tags">${post.hashtags.map(tag=>`<span class="aftermath-tag">#${escapeHtml(tag)}</span>`).join('')}</div>`:''}<div class="aftermath-stats"><span>${formatPostTime(post.created_at)}</span></div></article>`).join('');target.innerHTML='<div class="lived-events-label">Lived On</div>'+cards;}
+
+async function loadPublicProfilePlans(profile){
+  const localPlans=posts.filter(post=>post.user_id===profile.id);
+  if(!supabase)return localPlans;
+  const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,requires_college_verification').eq('user_id',profile.id).order('created_at',{ascending:false});
+  if(error)return localPlans;
+  const planRows=data||[];
+  if(!planRows.length)return [];
+  const planIds=planRows.map(plan=>plan.id);
+  let memberships=new Map(),swipes=new Map(),access=new Set();
+  if(currentUser&&planIds.length){
+    const [membershipResult,swipeResult,accessResult]=await Promise.all([
+      supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',planIds),
+      supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',planIds),
+      supabase.from('plan_verification_access').select('plan_id').eq('user_id',currentUser.id).in('plan_id',planIds)
+    ]);
+    memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));
+    swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));
+    access=new Set((accessResult.data||[]).map(item=>item.plan_id));
+  }
+  const knownPlans=new Map(localPlans.map(plan=>[plan.id,plan]));
+  return planRows.map(plan=>{
+    const known=knownPlans.get(plan.id);
+    if(known)return known;
+    const membershipStatus=memberships.get(plan.id)||null;
+    const swipeInterest=swipes.get(plan.id);
+    const requiresCollegeVerification=Boolean(plan.requires_college_verification);
+    const verificationShared=!requiresCollegeVerification||access.has(plan.id);
+    return {id:plan.id,user_id:plan.user_id,user:profile.username||profile.full_name||'Evenit member',name:profile.full_name||profile.username||'Evenit member',avatar:profile.avatar_url||'https://i.pravatar.cc/100?img=68',time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'',capacity:plan.capacity,joinedCount:0,membershipStatus,joined:membershipStatus==='confirmed',requiresCollegeVerification,hasCollegeDetails:collegeVerificationReady,verificationShared,verificationComplete:!requiresCollegeVerification||(collegeVerificationReady&&verificationShared),swipeInterest,interested:swipeInterest===true,saved:swipeInterest===true,isOwner:false};
+  });
+}
+
+renderPublicProfile=async function(profileId,{restore=false}={}){
+  if(!supabase||!profileId)return;
+  if(currentUser?.id===profileId){setPage('profile');return;}
+  if(!restore)pushAppView({type:'public-profile',profileId});
+  setInsightsDockScan(null);
+  pushNav('profile');
+  updateMobileHeader('profile');
+  showInsightsShell();
+  pageView.className='page-view public-profile-page-refined';
+  pageView.dataset.publicProfileId=profileId;
+  pageView.innerHTML='<section class="public-profile-page public-profile-page-refined" data-viewed-profile="'+escapeHtml(profileId)+'"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>Profile</strong><span aria-hidden="true"></span></header><div class="public-profile-loading"><p class="overline">Profile</p><h2>Loading profile...</h2></div></section>';
+  const profileResult=await supabase.rpc('get_public_profile',{p_user_id:profileId});
+  if(pageView.querySelector('.public-profile-page')?.dataset.viewedProfile!==profileId)return;
+  const profile=profileResult.data;
+  if(profileResult.error||!profile?.id){pageView.innerHTML='<section class="public-profile-page public-profile-page-refined" data-viewed-profile="'+escapeHtml(profileId)+'"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>Profile</strong><span aria-hidden="true"></span></header><div class="public-profile-loading"><p class="overline">Profile</p><h2>Profile unavailable</h2><p>'+escapeHtml(profileResult.error?.message||'This profile could not be loaded.')+'</p></div></section>';pageView.querySelector('#back-from-profile')?.addEventListener('click',goBack);return;}
+  let followState='none';
+  const [followersResult,followingResult,followStateResult,publicPlans]=await Promise.all([
+    supabase.from('user_follows').select('*',{count:'exact',head:true}).eq('following_id',profile.id),
+    supabase.from('user_follows').select('*',{count:'exact',head:true}).eq('follower_id',profile.id),
+    currentUser?supabase.rpc('get_follow_state',{p_following_id:profile.id}):Promise.resolve({data:{status:'none'}}),
+    loadPublicProfilePlans(profile)
+  ]);
+  if(pageView.querySelector('.public-profile-page')?.dataset.viewedProfile!==profileId)return;
+  followState=followStateResult.data?.status||'none';
+  const isPrivate=Boolean(profile.is_private);
+  const canViewActivity=!isPrivate||followState==='following';
+  const followerCount=followersResult.count||0;
+  const followingCount=followingResult.count||0;
+  const now=Date.now();
+  const planCards=publicPlans.map(post=>{
+    const isMember=['confirmed','waitlisted','interested'].includes(post.membershipStatus);
+    const isPast=post.starts_at&&new Date(post.starts_at).getTime()<now;
+    const requirement=joinRequirement(post);
+    const actionLabel=post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Interested';
+    const disabled=isMember||isPast;
+    return `<article class="public-plan-card" data-public-plan-card="${escapeHtml(post.id)}"><div class="public-plan-card-art ${escapeHtml(post.image||'pic-one')}"><span>${escapeHtml(post.category||'Event')}</span><h3>${escapeHtml(post.title)}</h3><p>${escapeHtml(post.location||'Location to be announced')}</p></div><div class="public-plan-card-body"><p class="public-plan-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>${post.caption?`<p class="public-plan-caption">${escapeHtml(post.caption)}</p>`:''}${requirement&&!isMember?`<span class="public-plan-requirement">${escapeHtml(requirement.label)}</span>`:''}<div class="public-plan-actions"><button type="button" class="public-plan-interest" data-public-plan-interest="${escapeHtml(post.id)}" ${disabled?'disabled':''}>${actionLabel}</button>${!disabled?`<button type="button" class="public-plan-dismiss" data-public-plan-dismiss="${escapeHtml(post.id)}">Not interested</button>`:''}</div></div></article>`;
+  }).join('');
+  const actions=`<div class="public-profile-actions"><button type="button" class="follow-btn" data-profile-follow="${escapeHtml(profile.id)}">${followState==='following'?'Following':followState==='pending'?'Requested':'Follow'}</button><button type="button" class="message-profile-btn" data-profile-message="${escapeHtml(profile.id)}" ${isPrivate&&followState!=='following'?'hidden':''}>Message</button></div>`;
+  const activity=canViewActivity?`<section class="public-profile-section public-profile-plans"><div class="public-profile-section-heading"><h3>Public plans</h3><span>${publicPlans.length}</span></div><div class="public-profile-plan-list">${planCards||'<div class="public-profile-empty">No public plans yet.</div>'}</div></section><section class="public-aftermath" data-aftermath-profile="${escapeHtml(profile.id)}"><div class="lived-events-label">Lived On</div><div class="lived-loading">Loading their aftermath…</div></section>`:`<section class="public-profile-private-note"><span>◌</span><div><strong>This profile is private</strong><p>Follow this person to see the plans and moments they choose to share.</p></div></section>`;
+  pageView.innerHTML=`<section class="public-profile-page public-profile-page-refined" data-viewed-profile="${escapeHtml(profile.id)}"><header class="public-profile-appbar"><button type="button" id="back-from-profile" aria-label="Go back">←</button><strong>@${escapeHtml(profile.username||'member')}</strong><span aria-hidden="true"></span></header><section class="public-profile-identity"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt="${escapeHtml(profile.full_name||profile.username||'Evenit member')}"><div><h2>${escapeHtml(profile.full_name||profile.username||'Evenit member')}</h2><p>@${escapeHtml(profile.username||'member')}</p></div></section><div class="public-profile-stats" aria-label="Profile stats"><span><strong>${publicPlans.length||profile.plans_posted||0}</strong>Events created</span><span><strong>${followerCount}</strong>Followers</span><span><strong>${followingCount}</strong>Following</span></div>${actions}${canViewActivity?`<section class="public-profile-about"><h3>About</h3><p>${profile.about?escapeHtml(profile.about):'No About shared yet.'}</p></section>`:''}${activity}</section>`;
+  pageView.querySelector('#back-from-profile')?.addEventListener('click',goBack);
+  if(canViewActivity)loadPublicAftermath(profile.id);
+  const followButton=pageView.querySelector('[data-profile-follow]');
+  const messageButton=pageView.querySelector('[data-profile-message]');
+  const setFollowState=state=>{followState=state;followButton.textContent=state==='following'?'Following':state==='pending'?'Requested':'Follow';followButton.classList.toggle('following',state==='following');followButton.classList.toggle('requested',state==='pending');if(messageButton)messageButton.hidden=isPrivate&&state!=='following';};
+  setFollowState(followState);
+  followButton?.addEventListener('click',async()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to follow this profile');return;}followButton.disabled=true;const {data,error}=await supabase.rpc('toggle_follow',{p_following_id:profile.id});followButton.disabled=false;if(error||data?.error){showToast(data?.error||error?.message||'Could not update this follow');return;}if(data.status==='followed'){setFollowState('following');showToast('Following ✓');}else if(data.status==='requested'){setFollowState('pending');showToast('Follow request sent');}else{setFollowState('none');showToast(data.status==='request_cancelled'?'Follow request cancelled':'Unfollowed');}});
+  messageButton?.addEventListener('click',()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to message this profile');return;}openDirectConversation(profile);});
+  const plansById=new Map(publicPlans.map(plan=>[plan.id,plan]));
+  pageView.querySelectorAll('[data-public-plan-interest]').forEach(button=>button.addEventListener('click',()=>requestPlanInterest(plansById.get(button.dataset.publicPlanInterest),button)));
+  pageView.querySelectorAll('[data-public-plan-dismiss]').forEach(button=>button.addEventListener('click',async()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to refine your recommendations');return;}const post=plansById.get(button.dataset.publicPlanDismiss);if(!post)return;button.disabled=true;const {error}=await supabase.from('plan_swipes').upsert({plan_id:post.id,user_id:currentUser.id,interested:false},{onConflict:'plan_id,user_id'});if(error){button.disabled=false;showToast(`Could not update this event: ${error.message}`);return;}post.swipeInterest=false;post.interested=false;button.closest('[data-public-plan-card]')?.remove();showToast('Not interested — we will show you less like this.');}));
+};
+	 document.addEventListener('click',e=>{const insights=e.target.closest('[data-insights-id]');if(insights){e.preventDefault();e.stopImmediatePropagation();renderInsights(insights.dataset.insightsId);return}const profile=e.target.closest('[data-public-profile-id],[data-profile-id]');if(profile&&profile.dataset.profileId||profile&&profile.dataset.publicProfileId){e.preventDefault();e.stopImmediatePropagation();renderPublicProfile(profile.dataset.publicProfileId||profile.dataset.profileId)}},true);
  if(supabase)supabase.auth.onAuthStateChange(()=>loadPlans());
   document.querySelectorAll('[data-page]').forEach(link=>link.addEventListener('click',()=>setTimeout(()=>{applyAdminContent();applyAdminStyles();refreshPageCopy()},150)));
  function replaceBrand(){document.querySelectorAll('body *').forEach(element=>element.childNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('upneXt'))node.nodeValue=node.nodeValue.replaceAll('upneXt','Evenit')}))}
