@@ -1171,6 +1171,18 @@ replaceBrand();
     scanModal.append(scanSurface);
     scanSurface.classList.remove('scan-page-surface');
   }
+  function leaveScanPicker(){
+    const route=window.history.state?.route;
+    if(route?.kind==='page'&&route.page==='scan'&&window.history.length<=2){
+      const homeRoute={...(window.history.state||{}),evenitNavigation:true,route:{kind:'page',page:'home'}};
+      const url=new URL(window.location.href);
+      url.hash='home';
+      window.history.replaceState(homeRoute,'',url);
+      setPage('home');
+      return;
+    }
+    goBack();
+  }
   function renderScanPage(){
     restoreScanSurface();
     void stopScanner();
@@ -1181,7 +1193,7 @@ replaceBrand();
     const hostedPlans=posts.filter(post=>post.isOwner);
     const plans=hostedPlans.length?`<div class="scan-plan-list">${hostedPlans.map(plan=>`<button type="button" class="scan-plan-choice" data-scan-plan-id="${escapeHtml(plan.id)}"><span class="scan-plan-choice-icon">▣</span><span><strong>${escapeHtml(plan.title)}</strong><small>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</small></span><b>Scan <i>→</i></b></button>`).join('')}</div>`:'<div class="scan-page-empty"><span>▣</span><strong>No hosted events to scan</strong><p>Only an event organizer can scan guest passes. Create an event, or open Insights for one you already host.</p></div>';
     pageView.innerHTML=`<section class="scan-page"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>Scan a<br><em>guest pass.</em></h2><p>Select one of your events to start checking guests in. This is a full page, so your device Back control returns naturally to where you were.</p></div><button type="button" class="scan-page-close" id="close-scan-page">Close</button></header><section class="scan-page-picker"><p class="scan-page-label">Your hosted events</p>${plans}</section></section>`;
-    pageView.querySelector('#close-scan-page')?.addEventListener('click',()=>goBack());
+    pageView.querySelector('#close-scan-page')?.addEventListener('click',leaveScanPicker);
     pageView.querySelectorAll('[data-scan-plan-id]').forEach(button=>button.addEventListener('click',()=>openScanPage(button.dataset.scanPlanId)));
   }
   function openScanPage(planId,options={}){
@@ -1796,7 +1808,7 @@ renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
-window.addEventListener('evenit:native-back',()=>{if(isScanPageActive()||scanModal?.classList.contains('open')){closeScanModal();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
+window.addEventListener('evenit:native-back',()=>{if(isScanPageActive()||scanModal?.classList.contains('open')){closeScanModal();return;}if(window.history.state?.route?.kind==='page'&&window.history.state.route.page==='scan'){leaveScanPicker();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
 // Host-approved requests and entry passes. This layer intentionally replaces
 // the older auto-confirm path while retaining legacy confirmed memberships.
