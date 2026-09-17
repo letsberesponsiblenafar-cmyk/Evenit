@@ -19,9 +19,9 @@ function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.
 function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
 function insightsReturnState(planId){return{...(window.history.state||{}),evenitNavigation:true,route:{kind:'insights',planId,from:{kind:'page',page:'profile',tab:'your-plans'}}}}
 function insightsUrl(planId){const url=new URL(window.location.href);url.hash=`insights/${encodeURIComponent(planId)}`;return url.href}
-function pushHostWorkspaceView(view){const state=insightsReturnState(view.planId);const url=insightsUrl(view.planId);window.history.replaceState(state,'',url);window.history.pushState({...state,evenitAppView:view},'',url)}
+function pushHostWorkspaceView(view){pushAppView(view)}
 function goBack(){
-  if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return;}
+  if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation||window.history.state?.evenitPublicEvent){window.history.back();return;}
   const previousPage=navHistory.pop();
   if(previousPage){if(previousPage==='home')goHome();else setPage(previousPage);return;}
   const currentPage=document.querySelector('[data-page].active')?.dataset.page;
@@ -41,9 +41,11 @@ window.addEventListener('popstate',event=>{
   }
   if(view.type==='agenda')showJoinedPage({restore:true});
   if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});
+  if(view.type==='insights')renderInsights(view.planId,{restore:true});
   if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}
   if(view.type==='public-profile')renderPublicProfile(view.profileId,{restore:true});
   if(view.type==='public-profile-list')openPublicProfileConnectionList(view.profileId,view.list,{restore:true});
+  if(view.type==='direct-message')openDirectConversation(view.profile,{restore:true});
   if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});
 });
 function goHome(){
@@ -69,7 +71,7 @@ async function trackPostImpressions(){if(!window.IntersectionObserver)return;con
  function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.textContent='EV'}updateMobileHeader()}
 const mapUrl=place=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
 async function refreshCollegeVerification(){if(!supabase||!currentUser){collegeVerificationReady=false;return false}const {data}=await supabase.from('profiles').select('college,enrollment_id').eq('id',currentUser.id).maybeSingle();collegeVerificationReady=Boolean(String(data?.college||'').trim()&&String(data?.enrollment_id||'').trim());return collegeVerificationReady}
-async function loadPlans(){if(!supabase)return;if(currentUser)await refreshCollegeVerification();const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult,swipeResult,accessResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_verification_access').select('plan_id').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));const swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));const access=new Set((accessResult.data||[]).map(item=>item.plan_id));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};const swipeInterest=swipes.get(plan.id);const requiresVerification=!!plan.requires_college_verification;const verificationShared=!requiresVerification||access.has(plan.id);return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',category:plan.category||'Community event',title:plan.title,location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:requiresVerification,hasCollegeDetails:collegeVerificationReady,verificationShared,verificationComplete:!requiresVerification||(collegeVerificationReady&&verificationShared),isOwner:currentUser?.id===plan.user_id,swipeInterest,interested:swipeInterest===true,saved:savedEventIds.has(plan.id)||swipeInterest===true}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile'&&!isPublicProfileOpen())renderProfile();renderPulseBar()}
+async function loadPlans(){if(!supabase)return;if(currentUser)await refreshCollegeVerification();const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,tagline,image_url,cover_style,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult,swipeResult,accessResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_verification_access').select('plan_id').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));const swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));const access=new Set((accessResult.data||[]).map(item=>item.plan_id));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};const swipeInterest=swipes.get(plan.id);const requiresVerification=!!plan.requires_college_verification;const verificationShared=!requiresVerification||access.has(plan.id);return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',imageUrl:plan.image_url||null,coverStyle:plan.cover_style||'aurora',category:plan.category||'Community event',title:plan.title,tagline:plan.tagline||'',location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:requiresVerification,hasCollegeDetails:collegeVerificationReady,verificationShared,verificationComplete:!requiresVerification||(collegeVerificationReady&&verificationShared),isOwner:currentUser?.id===plan.user_id,swipeInterest,interested:swipeInterest===true,saved:savedEventIds.has(plan.id)||swipeInterest===true}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile'&&!isPublicProfileOpen())renderProfile();renderPulseBar()}
 
 function renderPulseBar(){
   const bar=document.querySelector('#pulse-bar');
@@ -1006,7 +1008,7 @@ async function renderPublicProfile(profileId){
     }
   }
 }
-async function openDirectConversation(profile){
+async function openDirectConversation(profile,options={}){
   if(!supabase){showToast('Messages are unavailable while the live connection is offline.');return;}
   try{
     await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
@@ -1017,9 +1019,10 @@ async function openDirectConversation(profile){
     showToast(error?.message||'Log in to message this profile.');
     return;
   }
+  if(!options.restore)pushAppView({type:'direct-message',profile:{id:profile.id,username:profile.username||null,full_name:profile.full_name||null,avatar_url:profile.avatar_url||null,is_private:Boolean(profile.is_private)}});
   pushNav('messages');showInsightsShell();
   pageView.innerHTML='<div class="direct-message-page"><button class="back-link" id="back-from-direct-message">← Messages</button><div class="direct-message-heading"><img src="'+escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><p class="overline">Direct message</p><h2>'+escapeHtml(profile.full_name||profile.username||'Evenit member')+'</h2><p>@'+escapeHtml(profile.username||'member')+'</p></div></div><div class="direct-thread" id="direct-thread"><p>Loading conversation…</p></div><form class="direct-message-form" id="direct-message-form"><input name="body" maxlength="1000" placeholder="Write a message…" required><button class="publish-button" type="submit">Send <span>→</span></button></form></div>';
-  document.querySelector('#back-from-direct-message').onclick=()=>setPage('messages');
+  document.querySelector('#back-from-direct-message').onclick=goBack;
   const thread=document.querySelector('#direct-thread');
   const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';thread.scrollTop=thread.scrollHeight;};
   window.refreshEvenitDirectThread=loadThread;
@@ -1091,7 +1094,12 @@ async function loadPublicProfilePlans(profile){
 renderPublicProfile=async function(profileId,{restore=false}={}){
   if(!supabase||!profileId)return;
   if(currentUser?.id===profileId){setPage('profile');return;}
-  if(!restore)pushAppView({type:'public-profile',profileId});
+  if(!restore){
+    const state=window.history.state||{};
+    const routedProfile=state.evenitNavigation&&state.route?.kind==='public-profile'&&state.route?.profileId===profileId;
+    if(routedProfile)window.history.replaceState({...state,evenitAppView:{type:'public-profile',profileId}},'',window.location.href);
+    else pushAppView({type:'public-profile',profileId});
+  }
   setInsightsDockScan(null);
   pushNav('profile');
   updateMobileHeader('profile');
@@ -1282,7 +1290,7 @@ replaceBrand();
       if(!isScanPageActive()){
         const planId=row.plan_id||activeScanPlanId;
         await closeScanModal({returnToInsights:false});
-        if(planId) await renderInsights(planId);
+        if(planId) await renderInsights(planId,{restore:true});
       }
     }else{
       const reason=row?.reason||'Pass could not be verified';
@@ -1409,7 +1417,7 @@ replaceBrand();
    entryVerificationGuest.textContent=result?.attendee_name||result?.reason||'This pass could not be verified.';
    entryVerificationDetails.textContent=approved||result?.plan_id?[result.plan_title,result.location,formatDateTime(result.starts_at)].filter(Boolean).join(' · '):result?.reason||'';
    entryVerificationModal.classList.add('open');
-    if(approved&&result?.plan_id){ loadEntryPasses(); if(activeInsightsPlanId===result.plan_id) renderInsights(result.plan_id); }
+    if(approved&&result?.plan_id){ loadEntryPasses(); if(activeInsightsPlanId===result.plan_id) renderInsights(result.plan_id,{restore:true}); }
  }
 
  const entryTokenFromUrl=new URLSearchParams(window.location.search).get('entry_pass');
@@ -1726,7 +1734,7 @@ function scheduleEvenitLiveRefresh(kind){
     const activePage=document.querySelector('[data-page].active')?.dataset.page;
     if(kind==='plans'){loadPlansPreservingHostWorkspace();if(activePage==='discover')renderDiscover();}
     if(kind==='insights'&&activeInsightsPlanId&&pageView?.querySelector('.host-approval-insights')){
-      renderInsights(activeInsightsPlanId);
+      renderInsights(activeInsightsPlanId,{restore:true});
     }
     if(kind==='aftermath'&&pageView.hidden)loadAftermathFeed();
     if(kind==='notifications'&&activePage==='notifications')renderNotifications();
@@ -1919,19 +1927,21 @@ function renderHomeEventCards(){
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;
     const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
+    const coverStyle=['aurora','coffee','outdoors','studio'].includes(post.coverStyle)?post.coverStyle:'aurora';
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
       <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
         <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
         <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
       </header>
-      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}">
+      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
+        ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
         <span>${escapeHtml(post.category||'Event')}</span>
         <h2>${escapeHtml(post.title)}</h2>
         <p>${escapeHtml(post.location||'Location to be announced')}</p>
       </div>
       <div class="home-event-content">
+        ${post.tagline?`<p class="home-event-tagline">${escapeHtml(post.tagline)}</p>`:''}
         <p class="home-event-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>
-        ${post.caption?`<p class="home-event-description">${escapeHtml(post.caption)}</p>`:''}
         <div class="home-event-details"><span>${escapeHtml(attendance)}</span>${requirement?`<span class="home-event-requirement">${escapeHtml(requirement.label)}</span>`:''}</div>
         <button class="home-join-button ${isMember?'is-joined':''} ${requirement?'has-requirement':''}" data-home-join="${index}" ${disabled?'disabled':''}>${buttonLabel}</button>
       </div>
@@ -1977,7 +1987,6 @@ renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
-window.addEventListener('evenit:native-back',()=>{if(isScanPageActive()||scanModal?.classList.contains('open')){closeScanModal();return;}if(window.history.state?.route?.kind==='page'&&window.history.state.route.page==='scan'){leaveScanPicker();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
 // Host-approved requests and entry passes. This layer intentionally replaces
 // the older auto-confirm path while retaining legacy confirmed memberships.
@@ -2279,19 +2288,21 @@ renderHomeEventCards=function(){
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} confirmed`;
     const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
+    const coverStyle=['aurora','coffee','outdoors','studio'].includes(post.coverStyle)?post.coverStyle:'aurora';
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
       <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
         <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
         <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
       </header>
-      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}">
+      <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
+        ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
         <span>${escapeHtml(post.category||'Event')}</span>
         <h2>${escapeHtml(post.title)}</h2>
         <p>${escapeHtml(post.location||'Location to be announced')}</p>
       </div>
       <div class="home-event-content">
+        ${post.tagline?`<p class="home-event-tagline">${escapeHtml(post.tagline)}</p>`:''}
         <p class="home-event-when">${escapeHtml(post.starts_at?formatDateTime(post.starts_at):'Date to be announced')}</p>
-        ${post.caption?`<p class="home-event-description">${escapeHtml(post.caption)}</p>`:''}
         <div class="home-event-details"><span>${escapeHtml(attendance)}</span>${requirement&&!isMember?`<span class="home-event-requirement">${escapeHtml(requirement.label)}</span>`:''}</div>
         <button class="home-join-button ${isMember?'is-joined':''} ${requirement&&!isMember?'has-requirement':''}" data-home-join="${index}" ${disabled?'disabled':''}>${buttonLabel}</button>
       </div>
@@ -2301,9 +2312,15 @@ renderHomeEventCards=function(){
   enhanceHomePlanCards();
 };
 
-renderInsights=async function(planId){
+renderInsights=async function(planId,options={}){
   const post=posts.find(item=>item.id===planId);
   if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return;}
+  if(!options.restore){
+    const state=window.history.state||{};
+    const routedInsight=state.evenitNavigation&&state.route?.kind==='insights'&&state.route?.planId===planId;
+    if(routedInsight)window.history.replaceState({...state,evenitAppView:{type:'insights',planId}},'',window.location.href);
+    else pushAppView({type:'insights',planId});
+  }
   activeInsightsPlanId=planId;
   showInsightsShell();
   pageView.innerHTML='<div class="insights-page"><button class="back-link" id="back-from-insights">← Back</button><p class="overline">Event insights</p><h2>Loading requests...</h2></div>';
@@ -2333,7 +2350,7 @@ renderInsights=async function(planId){
       if(result.error)failures.push(result.error.message);else issued++;
     }
     await refreshEvenitLiveData({quiet:true});
-    await renderInsights(planId);
+    await renderInsights(planId,{restore:true});
     showToast(issued?`${issued} ${issued===1?'entry pass':'entry passes'} sent.${failures.length?' Some requests could not be approved.':''}`:failures[0]||'No passes were sent.');
   });
 };
@@ -2363,7 +2380,7 @@ async function openHostRequestReview(planId,userId,options={}){
   activeInsightsPlanId=planId;
   showInsightsShell();
   setInsightsDockScan(planId);
-  if(!options.restore)pushHostWorkspaceView({type:'host-request-review',planId,userId});
+  if(!options.restore)pushAppView({type:'host-request-review',planId,userId});
   pageView.innerHTML='<section class="host-request-review"><p class="overline">Host review</p><h2>Loading request…</h2></section>';
   const [insightResult,verificationByUser]=await Promise.all([
     supabase.rpc('get_plan_insights',{p_plan_id:planId}),
@@ -2387,7 +2404,7 @@ async function openHostRequestReview(planId,userId,options={}){
   pageView.innerHTML=`<section class="host-request-review"><header class="request-review-hero"><div><p class="overline">Host review</p><h2>${escapeHtml(attendee.full_name||attendee.username||'Event guest')}</h2><p>Request for ${escapeHtml(plan.title||post.title)}</p></div><button class="request-review-close" id="close-request-review" type="button" aria-label="Back to requests">×</button></header><section class="request-review-profile"><img src="${escapeHtml(attendee.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt=""><div><strong>${escapeHtml(attendee.full_name||attendee.username||'Evenit member')}</strong><span>@${escapeHtml(attendee.username||'member')}${attendee.neighborhood?` · ${escapeHtml(attendee.neighborhood)}`:''}</span>${profile.about?`<p>${escapeHtml(profile.about)}</p>`:''}</div><button class="request-review-profile-link" id="open-review-profile" type="button">View profile</button></section><section class="request-review-section"><p class="approval-eyebrow">Request details</p><h3>Guest answers</h3>${renderRequestAnswers(attendee.answers)}</section>${verificationSection}<section class="request-review-section review-event-context"><p class="approval-eyebrow">Event</p><h3>${escapeHtml(plan.title||post.title)}</h3><p>${escapeHtml(plan.location||post.location||'Location to be announced')} · ${escapeHtml(formatDateTime(plan.starts_at||post.starts_at))}</p></section><div class="request-review-actions"><button class="request-review-secondary" id="back-to-requests" type="button">Back to requests</button><button class="publish-button" id="issue-single-pass" type="button">Send pass <span>→</span></button></div></section>`;
   const returnToRequests=()=>{
     if(window.history.state?.evenitAppView?.type==='host-request-review')window.history.back();
-    else renderInsights(planId);
+    else renderInsights(planId,{restore:true});
   };
   pageView.querySelector('#close-request-review')?.addEventListener('click',returnToRequests);
   pageView.querySelector('#back-to-requests')?.addEventListener('click',returnToRequests);
@@ -2407,9 +2424,15 @@ async function openHostRequestReview(planId,userId,options={}){
   });
 }
 
-renderInsights=async function(planId){
+renderInsights=async function(planId,options={}){
   const post=posts.find(item=>item.id===planId);
   if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return;}
+  if(!options.restore){
+    const state=window.history.state||{};
+    const routedInsight=state.evenitNavigation&&state.route?.kind==='insights'&&state.route?.planId===planId;
+    if(routedInsight)window.history.replaceState({...state,evenitAppView:{type:'insights',planId}},'',window.location.href);
+    else pushAppView({type:'insights',planId});
+  }
   activeInsightsPlanId=planId;
   showInsightsShell();
   setInsightsDockScan(planId);
@@ -2454,19 +2477,32 @@ renderInsights=async function(planId){
       if(result.error)failures.push(result.error.message);else issued++;
     }
     await refreshEvenitLiveData({quiet:true});
-    await renderInsights(planId);
+    await renderInsights(planId,{restore:true});
     showToast(issued?`${issued} ${issued===1?'entry pass':'entry passes'} sent.${failures.length?' Some requests could not be approved.':''}`:failures[0]||'No passes were sent.');
   });
 };
+
+async function uploadPlanCoverImage(file,userId){
+  if(!file||!file.name||!file.size)return {url:null,path:null};
+  if(!String(file.type||'').startsWith('image/'))throw new Error('Choose a JPG, PNG, or WebP image for the plan cover.');
+  if(file.size>8*1024*1024)throw new Error('Keep the plan cover image under 8 MB.');
+  const extension=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+  const safeName=(file.name.replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'cover').slice(0,60);
+  const path=`${userId}/covers/${Date.now()}-${safeName}.${extension}`;
+  const {error}=await supabase.storage.from('plan-covers').upload(path,file,{upsert:false,contentType:file.type});
+  if(error)throw error;
+  return {url:supabase.storage.from('plan-covers').getPublicUrl(path).data.publicUrl,path};
+}
 
 document.querySelector('#post-form').onsubmit=async event=>{
   event.preventDefault();
   const form=event.currentTarget;
   const data=new FormData(form);
   const button=form.querySelector('[type="submit"]');
+  let uploadedCoverPath=null;
   try{
     if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then try again.');
-    await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
+    const user=await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
     const startsAt=new Date(String(data.get('when')||''));
     if(Number.isNaN(startsAt.getTime()))throw new Error('Choose a valid date and time for the event.');
     const questions=typeof window.getPlanFormQuestions==='function'?window.getPlanFormQuestions():[];
@@ -2479,14 +2515,19 @@ document.querySelector('#post-form').onsubmit=async event=>{
     const longitude=longitudeValue?Number(longitudeValue):null;
     if((latitude===null)!==(longitude===null)||!Number.isFinite(latitude??0)||!Number.isFinite(longitude??0))throw new Error('The selected location is not valid.');
     button.disabled=true;button.textContent='Publishing…';
-    const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_with_question_form',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_requires_college_verification:data.get('requires_college_verification')==='on',p_questions:questions,p_latitude:latitude,p_longitude:longitude}),15000,'Publishing timed out. Check your connection and try again.');
+    const cover=await uploadPlanCoverImage(data.get('cover_image'),user.id);
+    uploadedCoverPath=cover.path;
+    const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_with_question_form',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_requires_college_verification:data.get('requires_college_verification')==='on',p_questions:questions,p_latitude:latitude,p_longitude:longitude,p_tagline:String(data.get('tagline')||''),p_image_url:cover.url,p_cover_style:String(data.get('cover_style')||'aurora')}),15000,'Publishing timed out. Check your connection and try again.');
     if(error)throw error;
     if(!planId)throw new Error('The event was not confirmed by the database.');
     modal.classList.remove('open');
     form.reset();
     await refreshEvenitLiveData({quiet:true});
     showToast('Your plan is live everywhere ✦');
-  }catch(error){showToast(`Could not publish: ${error?.message||'Please try again.'}`);}
+  }catch(error){
+    if(uploadedCoverPath)await supabase.storage.from('plan-covers').remove([uploadedCoverPath]);
+    showToast(`Could not publish: ${error?.message||'Please try again.'}`);
+  }
   finally{button.disabled=false;button.innerHTML='Create plan <span>→</span>';}
 };
 
@@ -2829,4 +2870,26 @@ setPage=function(page){
   profileAwareSetPage(page);
   if(page==='scan')renderScanPage();
 };
+
+// Capacitor's Android backButton event is separate from browser popstate.
+// Route it through the exact same stack so native, mobile-web, and desktop
+// Back all return to the page that actually opened the current view.
+window.addEventListener('evenit:native-back',()=>{
+  if(document.querySelector('#profile-menu-panel')){closeProfileMenu();return;}
+  if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}
+  if(activeWorkspace){
+    if(window.history.state?.evenitAppView?.type==='workspace')window.history.back();
+    else closeWorkspace();
+    return;
+  }
+  if(isScanPageActive()){closeScanModal();return;}
+  if(window.history.state?.route?.kind==='page'&&window.history.state.route.page==='scan'){leaveScanPicker();return;}
+  const overlay=document.querySelector('.scan-backdrop.open,.sheet-backdrop.open,.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open');
+  if(overlay){
+    if(overlay===scanModal)closeScanModal();
+    else overlay.classList.remove('open');
+    return;
+  }
+  goBack();
+});
 })();

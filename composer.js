@@ -3,7 +3,7 @@
   if(!form)return;
 
   const preview={
-    title:document.querySelector('#preview-title'), category:document.querySelector('#preview-category'),
+    title:document.querySelector('#preview-title'), tagline:document.querySelector('#preview-tagline'), category:document.querySelector('#preview-category'),
     location:document.querySelector('#preview-location'), when:document.querySelector('#preview-when'),
     requests:document.querySelector('#preview-capacity'), caption:document.querySelector('#preview-caption')
   };
@@ -18,6 +18,7 @@
   }
   function updatePreview(){
     if(preview.title)preview.title.textContent=form.title.value.trim()||'Your plan title';
+    if(preview.tagline)preview.tagline.textContent=form.tagline?.value.trim()||'Your event tagline';
     if(preview.category)preview.category.textContent=(form.category.value||'Social').toUpperCase();
     if(preview.location)preview.location.textContent=form.where.value.trim()||'Choose a meeting place';
     if(preview.when)preview.when.textContent=formatDate(form.when.value);
@@ -31,7 +32,7 @@
     const stamp=document.querySelector('.composer-stamp');
     if(stamp)stamp.innerHTML='<span>EVENIT</span><strong>MAKE<br>IT HAPPEN</strong><small>Every good plan<br>starts here</small>';
     const steps=document.querySelector('.composer-steps');
-    if(steps)steps.innerHTML='<span class="active"><b>01</b> Basics</span><span><b>02</b> Guest questions</span><span><b>03</b> Scene</span><span><b>04</b> Entry</span>';
+    if(steps)steps.innerHTML='<span class="active"><b>01</b> Basics</span><span><b>02</b> Scene</span><span><b>03</b> Guest questions</span><span><b>04</b> Entry</span>';
     const requestPreview=preview.requests?.parentElement;
     if(requestPreview){requestPreview.querySelector('span').textContent='REQUESTS';preview.requests.id='preview-requests';}
   }
@@ -42,13 +43,13 @@
     const entry=sections.find(section=>section.textContent.includes('Requests & entry'));
     if(!basics||!scene||!entry)return;
     form.elements.capacity?.closest('.composer-capacity,.capacity-panel')?.remove();
-    scene.querySelector('legend').innerHTML='<b>03</b> Set the scene';
+    scene.querySelector('legend').innerHTML='<b>02</b> Set the scene';
     entry.classList.add('composer-entry-section');
     entry.querySelector('legend').innerHTML='<b>04</b> Entry details';
     const existingQuestions=entry.querySelector('.plan-questions');
     const questionSection=document.createElement('fieldset');
     questionSection.className='composer-section composer-question-section';
-    questionSection.innerHTML='<legend><b>02</b> Questions for guests</legend><p class="composer-section-copy">Optional — add only what you need.</p>';
+    questionSection.innerHTML='<legend><b>03</b> Questions for guests</legend><p class="composer-section-copy">Optional — add only what you need.</p>';
     existingQuestions?.remove();
     questionSection.append(existingQuestions||document.createElement('div'));
     const panel=questionSection.querySelector('.plan-questions');
@@ -57,10 +58,35 @@
     intro.className='composer-section-copy';
     intro.textContent='Approve guests and issue entry passes from Insights.';
     entry.insertBefore(intro,entry.querySelector('.verification-choice'));
-    scene.before(questionSection);
+    scene.after(questionSection);
   }
 
   setComposerCopy();mountQuestionSection();
+  const coverUpload=document.querySelector('#plan-cover-upload');
+  const coverStatus=document.querySelector('#plan-cover-status');
+  const previewPoster=document.querySelector('.preview-poster');
+  let coverPreviewUrl='';
+  function updateCoverPreview(){
+    if(!previewPoster)return;
+    const selected=form.querySelector('input[name="cover_style"]:checked')?.value||'aurora';
+    previewPoster.dataset.coverStyle=selected;
+    const file=coverUpload?.files?.[0];
+    if(coverPreviewUrl){URL.revokeObjectURL(coverPreviewUrl);coverPreviewUrl='';}
+    if(file){
+      coverPreviewUrl=URL.createObjectURL(file);
+      previewPoster.style.backgroundImage=`linear-gradient(0deg,rgba(18,15,40,.42),rgba(18,15,40,.04)),url("${coverPreviewUrl}")`;
+      previewPoster.style.backgroundSize='cover';
+      previewPoster.style.backgroundPosition='center';
+      if(coverStatus)coverStatus.textContent=`${file.name} will be used as this plan’s cover.`;
+    }else{
+      previewPoster.style.backgroundImage='';
+      previewPoster.style.backgroundSize='';
+      previewPoster.style.backgroundPosition='';
+      if(coverStatus)coverStatus.textContent='No image selected — your chosen abstract cover will be used.';
+    }
+  }
+  coverUpload?.addEventListener('change',updateCoverPreview);
+  form.querySelectorAll('input[name="cover_style"]').forEach(input=>input.addEventListener('change',updateCoverPreview));
   const questionList=document.querySelector('#plan-question-list');
   const questionEmpty=document.querySelector('#plan-question-empty');
   const addQuestion=document.querySelector('#add-plan-question');
@@ -121,6 +147,6 @@
   });
   document.addEventListener('click',event=>{if(event.target.closest('#open-modal,#profile-post'))document.querySelector('.sidebar')?.classList.remove('mobile-open');},true);
   form.addEventListener('input',updatePreview);form.addEventListener('change',updatePreview);
-  form.addEventListener('reset',()=>requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}updateQuestionControls();updatePreview();}));
-  updateQuestionControls();updatePreview();
+  form.addEventListener('reset',()=>requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}updateQuestionControls();updatePreview();updateCoverPreview();}));
+  updateQuestionControls();updatePreview();updateCoverPreview();
 })();

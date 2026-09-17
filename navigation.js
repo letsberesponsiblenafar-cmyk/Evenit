@@ -135,7 +135,7 @@
     if(replaying)return;
 
     const back=event.target.closest('.back-link');
-    if(back){event.preventDefault();event.stopImmediatePropagation();goBack();return}
+    if(back&&!window.history.state?.evenitAppView){event.preventDefault();event.stopImmediatePropagation();goBack();return}
 
     const insights=event.target.closest('[data-insights-id]');
     if(insights){pushRoute({kind:'insights',planId:insights.dataset.insightsId,from:currentRoute||pageRoute('home')});return}
