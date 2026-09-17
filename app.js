@@ -18,8 +18,9 @@ let navHistory=[];
 function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.shift()}
 function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
 function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
-window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}});
+window.addEventListener('popstate',event=>{const view=event.state?.evenitAppView;if(!view)return;if(view.type==='agenda')showJoinedPage({restore:true});if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});if(view.type==='plan-request'){const post=posts.find(item=>item.id===view.planId);if(post)openPlanRequestPage(post,{restore:true});}if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});});
 function goHome(){
+  setInsightsDockScan(null);
   navHistory=[];
   pageView.hidden=true;
   homeElements.forEach(e=>e.hidden=false);
@@ -912,6 +913,7 @@ loadSiteSettings();
  async function renderInsights(planId){const post=posts.find(item=>item.id===planId);if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return}activeInsightsPlanId=planId;showInsightsShell();pageView.innerHTML='<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back</button><p class="overline">Event insights</p><h2>Loading your numbers...</h2></div>';const {data,error}=await supabase.rpc('get_plan_insights',{p_plan_id:planId});if(error){pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back</button><p class="overline">Event insights</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(error.message)}</p></div>`;return}const info=typeof data==='string'?JSON.parse(data):data;const plan=info?.plan||post;const metrics=info?.metrics||{};const attendees=Array.isArray(info?.attendees)?info.attendees:[];const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);const attended=attendees.filter(item=>item.attended);const waitlisted=attendees.filter(item=>item.status==='waitlisted');const attendeeCard=item=>{const distance=item.distance_miles!==null&&item.distance_miles!==undefined?`${item.distance_miles} mi away`:item.neighborhood?(item.nearby?'Nearby \u00b7 same neighborhood':`Based in ${escapeHtml(item.neighborhood)}`):'Distance not shared';const state=item.attended?'Attended \u2713':item.status==='confirmed'?'Confirmed':'Waitlist #'+(item.queue_position||'');const cardClass=item.attended?'is-attended':item.status==='waitlisted'?'is-waitlisted':'';return`<button class="attendee-card ${cardClass}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')} \u00b7 ${distance}</small></span><b>${state}</b></button>`};const hostedCount=attended.length;const confirmedCount=confirmed.length+attended.length;pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-insights">\u2190 Back to your feed</button><div class="insights-header"><div><p class="overline">Event insights</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} \u00b7 ${formatDateTime(plan.starts_at||post.starts_at)}</p></div></div><div class="insights-metrics"><div class="insights-metric"><strong>${confirmedCount}</strong><span>Confirmed</span></div><div class="insights-metric"><strong>${hostedCount}</strong><span>Attended</span></div><div class="insights-metric"><strong>${waitlisted.length}</strong><span>Waitlisted</span></div><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reach</span></div></div><div class="insights-actions"><button class="scan-button" id="open-scan">Scan entry pass <span>\u2197</span></button><span class="insights-help">Guest shows QR \u00b7 host scans once to mark Attended</span></div><div class="insights-section"><h3>Attended (${attended.length})</h3>${attended.length?attended.map(attendeeCard).join(''):'<div class="insights-empty">No one checked in yet. Scan a guest QR to mark them as attended.</div>'}</div><div class="insights-section"><h3>Confirmed (${confirmed.length})</h3>${confirmed.length?confirmed.map(attendeeCard).join(''):'<div class="insights-empty">No pending confirmed guests.</div>'}</div><div class="insights-section"><h3>Waitlisted (${waitlisted.length})</h3>${waitlisted.length?waitlisted.map(attendeeCard).join(''):'<div class="insights-empty">No one on waitlist.</div>'}</div></div>`;document.querySelector('#open-scan').onclick=()=>openScanModal(planId);document.querySelector('#back-from-insights').onclick=()=>goBack();}
 async function renderPublicProfile(profileId){
   if(!supabase||!profileId)return;
+  setInsightsDockScan(null);
   pushNav('profile');
   updateMobileHeader('profile');
   showInsightsShell();
@@ -2069,18 +2071,109 @@ renderInsights=async function(planId){
 
 // Host approvals are a dedicated review workspace. The assignment below is
 // intentionally the final Insights renderer used by every host entry point.
+function setInsightsDockScan(planId=null){
+  const dock=document.querySelector('.mobile-dock button[data-dock-create],.mobile-dock button[data-insights-scan]');
+  if(!dock)return;
+  const icon=dock.querySelector('span');
+  const label=dock.querySelector('small');
+  if(planId){
+    if(!dock.dataset.createLabel)dock.dataset.createLabel=label?.textContent.trim()||'Create';
+    dock.dataset.insightsScan=planId;
+    dock.removeAttribute('data-dock-create');
+    dock.removeAttribute('onclick');
+    if(icon)icon.textContent='▣';
+    if(label)label.textContent='Scan';
+    dock.setAttribute('aria-label','Scan an event pass');
+    dock.onclick=event=>{event.preventDefault();event.stopPropagation();openScanModal(planId);};
+    return;
+  }
+  if(!dock.dataset.insightsScan)return;
+  delete dock.dataset.insightsScan;
+  dock.setAttribute('data-dock-create','');
+  if(icon)icon.textContent='＋';
+  if(label)label.textContent=dock.dataset.createLabel||'Create';
+  dock.setAttribute('aria-label','Create a plan');
+  dock.onclick=()=>document.querySelector('#open-modal')?.click();
+}
+
+async function loadHostVerificationDetails(planId){
+  const {data,error}=await supabase.rpc('get_plan_verification_details',{p_plan_id:planId});
+  if(error)return new Map();
+  return new Map((data||[]).map(item=>[item.user_id,item]));
+}
+
+function renderRequestAnswers(answers){
+  return Array.isArray(answers)&&answers.length
+    ?`<dl class="request-answers">${answers.map(answer=>`<div><dt>${escapeHtml(answer.question||'Question')}</dt><dd>${escapeHtml(answer.answer||'—')}</dd></div>`).join('')}</dl>`
+    :'<p class="request-answer-empty">No additional answers for this request.</p>';
+}
+
+async function openHostRequestReview(planId,userId,options={}){
+  const post=posts.find(item=>item.id===planId);
+  if(!supabase||!currentUser||!post||!post.isOwner)return;
+  activeInsightsPlanId=planId;
+  showInsightsShell();
+  setInsightsDockScan(planId);
+  if(!options.restore)pushAppView({type:'host-request-review',planId,userId});
+  pageView.innerHTML='<section class="host-request-review"><p class="overline">Host review</p><h2>Loading request…</h2></section>';
+  const [insightResult,verificationByUser]=await Promise.all([
+    supabase.rpc('get_plan_insights',{p_plan_id:planId}),
+    loadHostVerificationDetails(planId)
+  ]);
+  if(insightResult.error){
+    pageView.innerHTML=`<section class="host-request-review"><p class="overline">Host review</p><h2>Request unavailable</h2><p>${escapeHtml(insightResult.error.message)}</p></section>`;
+    return;
+  }
+  const info=typeof insightResult.data==='string'?JSON.parse(insightResult.data):insightResult.data;
+  const attendee=(info?.attendees||[]).find(item=>item.id===userId);
+  if(!attendee){
+    pageView.innerHTML='<section class="host-request-review"><p class="overline">Host review</p><h2>This request is no longer pending.</h2></section>';
+    return;
+  }
+  const profileResult=await supabase.rpc('get_public_profile',{p_user_id:userId});
+  const profile=profileResult.data||{};
+  const verification=verificationByUser.get(userId);
+  const plan=info?.plan||post;
+  const verificationSection=post.requiresCollegeVerification?`<section class="request-review-section verification-review"><p class="approval-eyebrow">Event-only verification</p><h3>College details</h3>${verification?`<dl class="review-detail-list"><div><dt>College</dt><dd>${escapeHtml(verification.college||'Not provided')}</dd></div><div><dt>Enrollment ID</dt><dd>${escapeHtml(verification.enrollment_id||'Not provided')}</dd></div></dl><p>Shared by the guest specifically for this event.</p>`:'<p class="review-pending-note">This guest has not shared verification details for this event.</p>'}</section>`:'';
+  pageView.innerHTML=`<section class="host-request-review"><header class="request-review-hero"><div><p class="overline">Host review</p><h2>${escapeHtml(attendee.full_name||attendee.username||'Event guest')}</h2><p>Request for ${escapeHtml(plan.title||post.title)}</p></div><button class="request-review-close" id="close-request-review" type="button" aria-label="Back to requests">×</button></header><section class="request-review-profile"><img src="${escapeHtml(attendee.avatar_url||'https://i.pravatar.cc/160?img=68')}" alt=""><div><strong>${escapeHtml(attendee.full_name||attendee.username||'Evenit member')}</strong><span>@${escapeHtml(attendee.username||'member')}${attendee.neighborhood?` · ${escapeHtml(attendee.neighborhood)}`:''}</span>${profile.about?`<p>${escapeHtml(profile.about)}</p>`:''}</div><button class="request-review-profile-link" id="open-review-profile" type="button">View profile</button></section><section class="request-review-section"><p class="approval-eyebrow">Request details</p><h3>Guest answers</h3>${renderRequestAnswers(attendee.answers)}</section>${verificationSection}<section class="request-review-section review-event-context"><p class="approval-eyebrow">Event</p><h3>${escapeHtml(plan.title||post.title)}</h3><p>${escapeHtml(plan.location||post.location||'Location to be announced')} · ${escapeHtml(formatDateTime(plan.starts_at||post.starts_at))}</p></section><div class="request-review-actions"><button class="request-review-secondary" id="back-to-requests" type="button">Back to requests</button><button class="publish-button" id="issue-single-pass" type="button">Send pass <span>→</span></button></div></section>`;
+  const returnToRequests=()=>{
+    if(window.history.state?.evenitAppView?.type==='host-request-review')window.history.back();
+    else renderInsights(planId);
+  };
+  pageView.querySelector('#close-request-review')?.addEventListener('click',returnToRequests);
+  pageView.querySelector('#back-to-requests')?.addEventListener('click',returnToRequests);
+  pageView.querySelector('#open-review-profile')?.addEventListener('click',()=>{
+    setInsightsDockScan(null);
+    renderPublicProfile(userId);
+  });
+  pageView.querySelector('#issue-single-pass')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    button.textContent='Sending…';
+    const result=await supabase.rpc('issue_plan_entry_pass',{p_plan_id:planId,p_user_id:userId});
+    if(result.error){button.disabled=false;button.innerHTML='Send pass <span>→</span>';showToast(result.error.message);return;}
+    await refreshEvenitLiveData({quiet:true});
+    showToast('Entry pass sent.');
+    returnToRequests();
+  });
+}
+
 renderInsights=async function(planId){
   const post=posts.find(item=>item.id===planId);
   if(!supabase||!currentUser||!post||!post.isOwner){showToast('Only the person who created this event can view insights');return;}
   activeInsightsPlanId=planId;
   showInsightsShell();
-  pageView.innerHTML='<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Loading requests...</h2></div>';
-  const {data,error}=await supabase.rpc('get_plan_insights',{p_plan_id:planId});
-  if(error){
-    pageView.innerHTML=`<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(error.message)}</p></div>`;
+  setInsightsDockScan(planId);
+  pageView.innerHTML='<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Loading insights…</h2></div>';
+  const [insightResult,verificationByUser]=await Promise.all([
+    supabase.rpc('get_plan_insights',{p_plan_id:planId}),
+    loadHostVerificationDetails(planId)
+  ]);
+  if(insightResult.error){
+    pageView.innerHTML=`<div class="insights-page host-approval-insights"><p class="overline">Host approvals</p><h2>Insights unavailable</h2><p class="insights-error">${escapeHtml(insightResult.error.message)}</p></div>`;
     return;
   }
-  const info=typeof data==='string'?JSON.parse(data):data;
+  const info=typeof insightResult.data==='string'?JSON.parse(insightResult.data):insightResult.data;
   const plan=info?.plan||post;
   const metrics=info?.metrics||{};
   const attendees=Array.isArray(info?.attendees)?info.attendees:[];
@@ -2088,13 +2181,11 @@ renderInsights=async function(planId){
   const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);
   const attended=attendees.filter(item=>item.attended);
   const passesIssued=confirmed.length+attended.length;
-  const answerList=item=>Array.isArray(item.answers)&&item.answers.length
-    ?`<dl class="request-answers">${item.answers.map(answer=>`<div><dt>${escapeHtml(answer.question||'Question')}</dt><dd>${escapeHtml(answer.answer||'—')}</dd></div>`).join('')}</dl>`
-    :'<p class="request-answer-empty">No additional answers for this request.</p>';
   const person=item=>`<button class="attendee-card ${item.attended?'is-attended':''}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small></span><b>${item.attended?'Attended ✓':'Pass sent'}</b></button>`;
-  const candidate=item=>`<label class="pass-candidate"><input type="checkbox" data-pass-candidate value="${escapeHtml(item.id)}"><span class="pass-candidate-avatar"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""></span><span class="pass-candidate-main"><span class="pass-candidate-title"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><em>${item.status==='waitlisted'?'Waitlisted':'New request'}</em></span><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small>${answerList(item)}</span></label>`;
-  pageView.innerHTML=`<div class="insights-page host-approval-insights"><header class="insights-hero"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div><span class="insights-live-state"><i></i>Live</span></header><div class="insights-metrics"><div class="insights-metric primary"><strong>${interested.length}</strong><span>To review</span></div><div class="insights-metric"><strong>${passesIssued}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Checked in</span></div><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reach</span></div></div><section class="insights-section pass-approval-section"><div class="approval-heading"><div><p class="approval-eyebrow">Requests</p><h3>People waiting for a pass</h3><p>Review their answers, select the people you approve, then send their QR passes.</p></div><div class="approval-actions"><span id="pass-selection-count" aria-live="polite">Select requests</span><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty"><strong>No requests yet</strong><span>New interest requests will appear here automatically.</span></div>'}</div></section><section class="insights-utility"><div><strong>Door check-in</strong><span>Scan a guest’s QR only when they arrive.</span></div><button class="scan-button" id="open-scan">Scan pass <span>↗</span></button></section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Issued</p><h3>Pass holders</h3></div><span>${confirmed.length}</span></div>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty"><strong>No passes sent</strong><span>Approved guests will appear here.</span></div>'}</section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Attendance</p><h3>Checked in</h3></div><span>${attended.length}</span></div>${attended.length?attended.map(person).join(''):'<div class="insights-empty"><strong>No one checked in yet</strong><span>Use Scan pass at the door to record attendance.</span></div>'}</section></div>`;
+  const candidate=item=>{const verification=verificationByUser.get(item.id);const answerCount=Array.isArray(item.answers)?item.answers.length:0;return`<article class="pass-candidate"><label class="pass-candidate-select"><input type="checkbox" data-pass-candidate value="${escapeHtml(item.id)}" aria-label="Select ${escapeHtml(item.full_name||item.username||'request')}"></label><button class="pass-candidate-review" type="button" data-request-review="${escapeHtml(item.id)}"><span class="pass-candidate-avatar"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""></span><span class="pass-candidate-main"><span class="pass-candidate-title"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><em>${item.status==='waitlisted'?'Waitlisted':'New request'}</em></span><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small><span class="pass-candidate-summary">${answerCount?`${answerCount} ${answerCount===1?'answer':'answers'} ready to review`:'No guest questions'}${post.requiresCollegeVerification?verification?' · Verification shared':' · Verification pending':''}</span></span><span class="pass-candidate-open">Review <b>→</b></span></button></article>`;};
+  pageView.innerHTML=`<div class="insights-page host-approval-insights"><header class="insights-hero"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div><span class="insights-live-state"><i></i>Live</span></header><section class="insight-metric-grid" aria-label="Event performance"><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reached</span></div><div class="insights-metric primary"><strong>${Number(metrics.interested??interested.length)}</strong><span>Interested</span></div><div class="insights-metric"><strong>${Number(metrics.waitlisted||0)}</strong><span>Waitlisted</span></div><div class="insights-metric"><strong>${passesIssued}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Checked in</span></div></section><section class="insights-utility insights-scan-priority"><div><p class="approval-eyebrow">At the door</p><strong>Scan guest pass</strong><span>Check in an approved guest in seconds.</span></div><button class="scan-button" id="open-scan">Scan pass <span>↗</span></button></section><section class="insights-section pass-approval-section"><div class="approval-heading"><div><p class="approval-eyebrow">Requests</p><h3>People waiting for a pass</h3><p>Open any request to review the guest’s profile, answers, and event-only verification. Or select several people and approve them together.</p></div><div class="approval-actions"><span id="pass-selection-count" aria-live="polite">Select requests</span><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty"><strong>No requests yet</strong><span>New interest requests will appear here automatically.</span></div>'}</div></section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Issued</p><h3>Pass holders</h3></div><span>${confirmed.length}</span></div>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty"><strong>No passes sent</strong><span>Approved guests will appear here.</span></div>'}</section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Attendance</p><h3>Checked in</h3></div><span>${attended.length}</span></div>${attended.length?attended.map(person).join(''):'<div class="insights-empty"><strong>No one checked in yet</strong><span>Use Scan pass at the door to record attendance.</span></div>'}</section></div>`;
   pageView.querySelector('#open-scan')?.addEventListener('click',()=>openScanModal(planId));
+  pageView.querySelectorAll('[data-request-review]').forEach(button=>button.addEventListener('click',()=>openHostRequestReview(planId,button.dataset.requestReview)));
   const updatePassSelection=()=>{
     const total=pageView.querySelectorAll('[data-pass-candidate]:checked').length;
     const label=pageView.querySelector('#pass-selection-count');
@@ -2444,6 +2535,7 @@ document.addEventListener('click',event=>{
 // explicitly keep it in sync whenever navigation changes pages.
 const profileAwareSetPage=setPage;
 setPage=function(page){
+  setInsightsDockScan(null);
   document.querySelector('#pulse-bar')?.toggleAttribute('hidden',page!=='home');
   profileAwareSetPage(page);
 };
