@@ -23,8 +23,8 @@ function pushHostWorkspaceView(view){const state=insightsReturnState(view.planId
 function goBack(){if(window.history.state?.evenitAppView||window.history.state?.evenitNavigation){window.history.back();return}const prev=navHistory.pop();if(prev==='home'||!prev)goHome();else setPage(prev)}
 window.addEventListener('popstate',event=>{
   const view=event.state?.evenitAppView;
-  if(view?.type==='host-scan'){openScanModal(view.planId,{restore:true});return;}
-  if(scanModal?.classList.contains('open'))closeScanModal({returnToInsights:false});
+  if(view?.type==='host-scan-page'){openScanPage(view.planId,{restore:true});return;}
+  if(isScanPageActive()||scanModal?.classList.contains('open'))closeScanModal({returnToInsights:false});
   if(!view)return;
   if(view.type==='agenda')showJoinedPage({restore:true});
   if(view.type==='agenda-detail')showAgendaDetail(view.planId,{restore:true});
@@ -1066,6 +1066,7 @@ replaceBrand();
   entryVerificationModal.onclick=event=>{if(event.target===entryVerificationModal)entryVerificationModal.classList.remove('open')};
 
   const scanModal=document.querySelector('#scan-modal');
+  const scanSurface=scanModal.querySelector('.scan-modal');
   const scanReader=document.querySelector('#scan-reader');
   const scanStatus=document.querySelector('#scan-status');
   const scanInput=document.querySelector('#scan-input');
@@ -1108,10 +1109,12 @@ replaceBrand();
     if(row?.valid){
       setScanResult(`Entry verified: ${row.attendee_name} for ${row.plan_title}`, 'valid');
       showToast(`Checked in ${row.attendee_name} \u2713`);
-      const planId=row.plan_id||activeScanPlanId;
-      await closeScanModal({returnToInsights:false});
-      if(planId) await renderInsights(planId);
       await loadEntryPasses();
+      if(!isScanPageActive()){
+        const planId=row.plan_id||activeScanPlanId;
+        await closeScanModal({returnToInsights:false});
+        if(planId) await renderInsights(planId);
+      }
     }else{
       const reason=row?.reason||'Pass could not be verified';
       setScanResult(reason, 'invalid');
@@ -1138,7 +1141,7 @@ replaceBrand();
       await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:250}}, async decoded=>{
         await verifyScannedToken(decoded);
       }, ()=>{});
-      if(session!==scanSession||!scanModal.classList.contains('open')||html5Scanner!==scanner){
+      if(session!==scanSession||(!scanModal.classList.contains('open')&&!isScanPageActive())||html5Scanner!==scanner){
         try{await scanner.stop();}catch(e){}
         try{scanner.clear();}catch(e){}
         return;
@@ -1158,25 +1161,60 @@ replaceBrand();
     await Promise.race([stop,new Promise(resolve=>setTimeout(resolve,450))]);
     try{scanner.clear();}catch(e){}
   }
+  function isScanPageActive(){return scanSurface.classList.contains('scan-page-surface');}
+  function setScanPageNavigation(){
+    document.querySelectorAll('[data-page]').forEach(link=>link.classList.toggle('active',link.dataset.page==='scan'));
+    updateMobileHeader('scan');
+  }
+  function restoreScanSurface(){
+    if(!isScanPageActive())return;
+    scanModal.append(scanSurface);
+    scanSurface.classList.remove('scan-page-surface');
+  }
+  function renderScanPage(){
+    restoreScanSurface();
+    void stopScanner();
+    activeScanPlanId=null;
+    homeElements.forEach(element=>element.hidden=true);
+    pageView.hidden=false;
+    setScanPageNavigation();
+    const hostedPlans=posts.filter(post=>post.isOwner);
+    const plans=hostedPlans.length?`<div class="scan-plan-list">${hostedPlans.map(plan=>`<button type="button" class="scan-plan-choice" data-scan-plan-id="${escapeHtml(plan.id)}"><span class="scan-plan-choice-icon">▣</span><span><strong>${escapeHtml(plan.title)}</strong><small>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</small></span><b>Scan <i>→</i></b></button>`).join('')}</div>`:'<div class="scan-page-empty"><span>▣</span><strong>No hosted events to scan</strong><p>Only an event organizer can scan guest passes. Create an event, or open Insights for one you already host.</p></div>';
+    pageView.innerHTML=`<section class="scan-page"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>Scan a<br><em>guest pass.</em></h2><p>Select one of your events to start checking guests in. This is a full page, so your device Back control returns naturally to where you were.</p></div><button type="button" class="scan-page-close" id="close-scan-page">Close</button></header><section class="scan-page-picker"><p class="scan-page-label">Your hosted events</p>${plans}</section></section>`;
+    pageView.querySelector('#close-scan-page')?.addEventListener('click',()=>goBack());
+    pageView.querySelectorAll('[data-scan-plan-id]').forEach(button=>button.addEventListener('click',()=>openScanPage(button.dataset.scanPlanId)));
+  }
+  function openScanPage(planId,options={}){
+    const plan=posts.find(post=>post.id===planId);
+    if(!plan?.isOwner){showToast('Only the event organizer can scan passes.');renderScanPage();return;}
+    activeScanPlanId=planId;
+    if(!options.restore)pushAppView({type:'host-scan-page',planId});
+    homeElements.forEach(element=>element.hidden=true);
+    pageView.hidden=false;
+    setScanPageNavigation();
+    pageView.innerHTML=`<section class="scan-page scan-page-live"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>${escapeHtml(plan.title)}</h2><p>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</p></div><button type="button" class="scan-page-close" id="close-scan-page">Done</button></header><div class="scan-page-note"><span>▣</span><p><strong>Ready to check in guests.</strong><small>Use the camera or enter a pass code. Each pass can be checked in once.</small></p></div><div id="scan-page-mount"></div></section>`;
+    pageView.querySelector('#scan-page-mount').append(scanSurface);
+    scanSurface.classList.add('scan-page-surface');
+    scanModal.classList.remove('open');
+    scanInput.value='';
+    setScanResult('', '');
+    pageView.querySelector('#close-scan-page')?.addEventListener('click',()=>closeScanModal());
+    startScanner();
+  }
   async function closeScanModal({returnToInsights=true}={}){
-    const planId=activeScanPlanId;
+    const wasScanPage=isScanPageActive();
     activeScanPlanId=null;
     scanModal.classList.remove('open');
+    restoreScanSurface();
     void stopScanner();
-    if(returnToInsights&&window.history.state?.evenitAppView?.type==='host-scan'){
+    if(wasScanPage&&returnToInsights&&window.history.state?.evenitAppView?.type==='host-scan-page'){
       window.history.back();
       return;
     }
-    if(returnToInsights&&planId&&!pageView?.querySelector('.host-approval-insights'))await renderInsights(planId);
+    if(wasScanPage)return;
+    if(returnToInsights&&window.history.state?.evenitAppView?.type==='host-scan')window.history.back();
   }
-  function openScanModal(planId,options={}){
-    activeScanPlanId=planId;
-    scanInput.value='';
-    setScanResult('', '');
-    scanModal.classList.add('open');
-    if(!options.restore)pushHostWorkspaceView({type:'host-scan',planId});
-    startScanner();
-  }
+  function openScanModal(planId,options={}){openScanPage(planId,options);}
   scanModal.querySelector('#close-scan').onclick=()=>closeScanModal();
   scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
@@ -1758,7 +1796,7 @@ renderPosts();
 window.addEventListener('online',()=>{setEvenitConnectionState(true,'Connection restored — refreshing now');refreshEvenitLiveData({quiet:true});});
 window.addEventListener('offline',()=>setEvenitConnectionState(false,'You are offline. Reconnect to refresh.'));
 window.addEventListener('evenit:network',event=>{const connected=Boolean(event.detail?.connected);setEvenitConnectionState(connected,connected?'Connection restored — refreshing now':'You are offline. Reconnect to refresh.');if(connected)refreshEvenitLiveData({quiet:true});});
-window.addEventListener('evenit:native-back',()=>{if(scanModal?.classList.contains('open')){closeScanModal();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
+window.addEventListener('evenit:native-back',()=>{if(isScanPageActive()||scanModal?.classList.contains('open')){closeScanModal();return;}if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}if(document.querySelector('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open')){document.querySelectorAll('.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open,.sheet-backdrop.open').forEach(element=>element.classList.remove('open'));return;}goBack();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshEvenitLiveData({quiet:true});});
 // Host-approved requests and entry passes. This layer intentionally replaces
 // the older auto-confirm path while retaining legacy confirmed memberships.
@@ -2113,36 +2151,8 @@ renderInsights=async function(planId){
 // Host approvals are a dedicated review workspace. The assignment below is
 // intentionally the final Insights renderer used by every host entry point.
 function setInsightsDockScan(planId=null){
-  const controls=[
-    document.querySelector('.mobile-dock button[data-dock-create],.mobile-dock button[data-insights-scan]'),
-    document.querySelector('#open-modal')
-  ].filter(Boolean);
-  controls.forEach(control=>{
-    const mobile=control.closest('.mobile-dock');
-    const icon=control.querySelector('span');
-    const label=control.querySelector('small');
-    if(planId){
-      if(!control.dataset.createHtml)control.dataset.createHtml=control.innerHTML;
-      control.dataset.insightsScan=planId;
-      control.setAttribute('data-insights-scan',planId);
-      control.removeAttribute('data-dock-create');
-      control.removeAttribute('onclick');
-      control.classList.add('host-scan-control');
-      if(mobile){
-        if(icon)icon.textContent='▣';
-        if(label)label.textContent='Scan';
-      }else control.innerHTML='▣ <span>Scan pass</span>';
-      control.setAttribute('aria-label','Scan an event pass');
-      return;
-    }
-    if(!control.dataset.insightsScan)return;
-    delete control.dataset.insightsScan;
-    control.removeAttribute('data-insights-scan');
-    control.classList.remove('host-scan-control');
-    control.innerHTML=control.dataset.createHtml||control.innerHTML;
-    if(mobile)control.setAttribute('data-dock-create','');
-    control.setAttribute('aria-label','Create a plan');
-  });
+  // Scan Pass is now a permanent navigation destination, not a temporary
+  // replacement for Create. Insights keeps its own Scan pass action above.
 }
 
 async function loadHostVerificationDetails(planId){
@@ -2295,7 +2305,7 @@ document.querySelector('#post-form').onsubmit=async event=>{
 // the Home board visible underneath it.
 function syncInitialPageFromAddress(){
   const [route,tab]=decodeURIComponent(window.location.hash.replace(/^#/,'')).split('/');
-  const pages=new Set(['home','discover','groups','notifications','messages','profile','saved','settings']);
+  const pages=new Set(['home','discover','groups','notifications','messages','profile','saved','settings','scan']);
   if(!pages.has(route)||route==='home')return;
   const sharedProfileId=new URLSearchParams(window.location.search).get('profile');
   if(route==='profile'&&sharedProfileId){setPage('profile');setTimeout(()=>renderPublicProfile(sharedProfileId),0);return;}
@@ -2591,9 +2601,9 @@ document.addEventListener('click',event=>{
 // explicitly keep it in sync whenever navigation changes pages.
 const profileAwareSetPage=setPage;
 setPage=function(page){
-  const restoringInsights=page==='profile'&&window.history.state?.evenitNavigation&&window.history.state?.route?.kind==='insights';
-  if(!restoringInsights)setInsightsDockScan(null);
+  setInsightsDockScan(null);
   document.querySelector('#pulse-bar')?.toggleAttribute('hidden',page!=='home');
   profileAwareSetPage(page);
+  if(page==='scan')renderScanPage();
 };
 })();
