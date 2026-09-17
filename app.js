@@ -1046,7 +1046,7 @@ async function openDirectConversation(profile,options={}){
   const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';thread.scrollTop=thread.scrollHeight;};
   window.refreshEvenitDirectThread=loadThread;
   await loadThread();
-  document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await loadThread();};
+  document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await Promise.all([loadThread(),loadMessageInbox()]);};
 }
 async function getProfileAftermath(profileId){
   if(!supabase||!profileId)return [];
@@ -1640,59 +1640,92 @@ document.querySelector('#nearby-refresh')?.addEventListener('click', loadNearbyP
 async function loadGroups(){
   const list=document.querySelector('#groups-list');
   const rail=document.querySelector('#rail-groups');
-  if(!list) return;
   if(!supabase||!currentUser){
-    list.innerHTML='<div class="nearby-empty" style="padding:22px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">Log in to see your groups.</div>';
+    if(list)list.innerHTML='<div class="nearby-empty" style="padding:22px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">Log in to see your groups.</div>';
     if(rail) rail.innerHTML='<div class="nearby-empty" style="padding:14px;text-align:center;color:#6E6E73;font-size:11px;border:1px dashed #E8E8ED;border-radius:14px;background:#fff">Log in to see groups.</div>';
     return;
   }
-  list.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading groups...</div>';
-  const {data,error}=await supabase.rpc('get_user_groups');
-  if(error){ list.innerHTML=`<div style="padding:16px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
+  if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading groups...</div>';
+  const {data,error}=await supabase.rpc('get_group_conversations');
+  if(error){ if(list)list.innerHTML=`<div style="padding:16px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
   if(!data||!data.length){
-    list.innerHTML='<div class="nearby-empty" style="padding:28px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font-weight:600;color:#1D1D1F">No groups yet</div><div style="font-size:12px;margin-top:6px">Create a private circle for your people. Max 150.</div><button id="empty-create-group" class="publish-button" style="margin:16px auto 0;border-radius:999px;width:auto">＋ Create group</button></div>';
+    if(list)list.innerHTML='<div class="nearby-empty" style="padding:28px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font-weight:600;color:#1D1D1F">No groups yet</div><div style="font-size:12px;margin-top:6px">Create a private circle and add the people who belong in it.</div><button id="empty-create-group" class="publish-button" style="margin:16px auto 0;border-radius:999px;width:auto">＋ Create group</button></div>';
     document.querySelector('#empty-create-group')?.addEventListener('click', ()=>document.querySelector('#group-modal')?.classList.add('open'));
     if(rail) rail.innerHTML='<div class="nearby-empty" style="padding:14px;text-align:center;color:#6E6E73;font-size:11px;border:1px dashed #E8E8ED;border-radius:14px;background:#fff">No groups yet.<br><small><a href="#messages" data-page="messages" style="color:#5E5CE6;font-weight:600;text-decoration:none">Create one</a></small></div>';
     return;
   }
-  list.innerHTML=data.map(g=>`
-    <div class="group-card" data-group-id="${escapeHtml(g.id)}" style="background:#fff;border:1px solid #E8E8ED;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,0.04)">
-      <div style="min-width:0;flex:1"><div style="display:flex;gap:8px;align-items:center"><strong style="font:600 15px -apple-system,sans-serif;letter-spacing:-0.02em;overflow-wrap:anywhere">${escapeHtml(g.name)}</strong><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${g.is_private?'#5E5CE6':'#6E6E73'};background:${g.is_private?'#F2F0FF':'#F5F5F7'};border-radius:999px;padding:4px 8px">${g.is_private?'Private':'Open'}</span></div><div style="font-size:12px;color:#6E6E73;margin-top:4px;line-height:1.4;overflow-wrap:anywhere">${escapeHtml(g.description||'No description')}</div><div style="font-size:11px;color:#6E6E73;margin-top:6px">${g.member_count}/${g.max_members} members ${g.is_member?'· You’re in':''}</div></div>
-      <div style="display:flex;flex-direction:column;gap:8px;flex:0 0 auto">${g.is_member?`<button class="publish-button" data-open-group="${escapeHtml(g.id)}" style="border-radius:999px;padding:10px 16px;font-size:13px">Open</button>`:`<button class="publish-button" data-join-group="${escapeHtml(g.id)}" style="border-radius:999px;padding:10px 16px;font-size:13px;background:#1D1D1F">Join</button>`}</div>
-    </div>
+  if(list)list.innerHTML=data.map(g=>`
+    <button class="group-card" data-open-group="${escapeHtml(g.id)}" style="width:100%;background:#fff;border:1px solid #E8E8ED;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,0.04);text-align:left;cursor:pointer">
+      <div style="min-width:0;flex:1"><div style="display:flex;gap:8px;align-items:center"><strong style="font:600 15px -apple-system,sans-serif;letter-spacing:-0.02em;overflow-wrap:anywhere">${escapeHtml(g.name)}</strong><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#5E5CE6;background:#F2F0FF;border-radius:999px;padding:4px 8px">Private</span></div><div style="font-size:12px;color:#6E6E73;margin-top:4px;line-height:1.4;overflow-wrap:anywhere">${escapeHtml(g.last_body||g.description||'No messages yet')}</div><div style="font-size:11px;color:#6E6E73;margin-top:6px">${g.member_count}/${g.max_members} members · ${escapeHtml(g.viewer_role)}</div></div>
+      <small style="color:#6E6E73;font-size:10px;white-space:nowrap">${g.last_at?escapeHtml(formatPostTime(g.last_at)):'New'}</small>
+    </button>
   `).join('');
-  // rail preview
   if(rail){
     const top=data.slice(0,3);
-    rail.innerHTML=top.map(g=>`<div class="suggestion" style="padding:10px 0"><div style="width:32px;height:32px;border-radius:50%;background:#F2F0FF;color:#5E5CE6;display:grid;place-items:center;font-weight:700;font-size:12px">${escapeHtml(g.name.slice(0,2).toUpperCase())}</div><div style="flex:1;min-width:0"><strong style="font:600 12px -apple-system,sans-serif">${escapeHtml(g.name)}</strong><small style="color:#6E6E73;font-size:10px">${g.member_count} members</small></div><button data-open-group="${escapeHtml(g.id)}" style="border:1px solid #E8E8ED;background:#fff;border-radius:999px;padding:5px 10px;font:600 10px -apple-system,sans-serif;cursor:pointer">Open</button></div>`).join('') || '<div class="nearby-empty" style="padding:12px;text-align:center;color:#6E6E73;font-size:11px">No groups</div>';
+    rail.innerHTML=top.map(g=>`<div class="suggestion" style="padding:10px 0"><div style="width:32px;height:32px;border-radius:50%;background:#F2F0FF;color:#5E5CE6;display:grid;place-items:center;font-weight:700;font-size:12px">${escapeHtml(g.name.slice(0,2).toUpperCase())}</div><div style="flex:1;min-width:0"><strong style="font:600 12px -apple-system,sans-serif">${escapeHtml(g.name)}</strong><small style="color:#6E6E73;font-size:10px">${g.member_count} members</small></div><button data-open-group="${escapeHtml(g.id)}" style="border:1px solid #E8E8ED;background:#fff;border-radius:999px;padding:5px 10px;font:600 10px -apple-system,sans-serif;cursor:pointer">Open</button></div>`).join('');
   }
-  list.querySelectorAll('[data-join-group]').forEach(b=>b.onclick=async()=>{
-    const gid=b.dataset.joinGroup;
-    b.disabled=true; b.textContent='Joining...';
-    const {error}=await supabase.rpc('join_group',{p_group_id:gid});
-    if(error){ showToast(error.message); b.disabled=false; b.textContent='Join'; return; }
-    showToast('Joined group ✓'); await loadGroups();
-  });
-  list.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>openGroup(b.dataset.openGroup));
+  list?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>openGroup(b.dataset.openGroup));
   rail?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>{ setPage('groups'); setTimeout(()=>openGroup(b.dataset.openGroup), 300); });
 }
 async function openGroup(groupId){
   window.evenitActiveGroupId=groupId;
-  if(!supabase) return;
-  const {data:group}=await supabase.from('groups').select('id,name,description').eq('id',groupId).maybeSingle();
-  const {data:messages}=await supabase.from('group_messages').select('id,body,created_at,user_id').eq('group_id',groupId).order('created_at',{ascending:true}).limit(50);
-  const title=group?.name||'Group';
-  const listId='group-messages-'+groupId;
-  pageView.innerHTML=`<div class="insights-page"><button class="back-link" id="back-from-group">← Back to messages</button><div class="insights-header"><div><p class="overline">Private group</p><h2>${escapeHtml(title)}</h2><p style="color:#6E6E73;font-size:12px">${escapeHtml(group?.description||'Only members see messages')}</p></div><span style="background:#F2F0FF;color:#5E5CE6;border-radius:999px;padding:8px 12px;font:700 11px -apple-system,sans-serif">Private</span></div><div id="${listId}" style="margin-top:18px;display:grid;gap:10px;min-height:200px">${!messages||!messages.length?'<div style="padding:24px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">No messages yet. Say hi.</div>':messages.map(m=>`<div style="background:#fff;border:1px solid #E8E8ED;border-radius:16px;padding:12px 14px"><div style="font:600 12px -apple-system,sans-serif">${escapeHtml(m.user_id.slice(0,8))}</div><div style="font-size:14px;line-height:1.45;margin-top:2px">${escapeHtml(m.body)}</div><small style="color:#6E6E73;font-size:10px">${formatPostTime(m.created_at)}</small></div>`).join('')}</div><form id="group-message-form" style="display:flex;gap:10px;margin-top:16px;position:sticky;bottom:0;background:#F5F5F7;padding:12px 0"><input id="group-message-input" placeholder="Message to group..." maxlength="500" style="flex:1;border:1px solid #E8E8ED;border-radius:999px;padding:12px 16px;font:500 14px -apple-system,sans-serif"><button type="submit" class="publish-button" style="border-radius:999px;padding:12px 18px">Send</button></form></div>`;
-  document.querySelector('#back-from-group').onclick=()=>goBack();
+  if(!supabase||!currentUser) return;
+  const [{data:group},{data:messages,error:messagesError},{data:members,error:membersError}]=await Promise.all([
+    supabase.from('groups').select('id,name,description,max_members').eq('id',groupId).maybeSingle(),
+    supabase.rpc('get_group_messages',{p_group_id:groupId}),
+    supabase.rpc('get_group_members',{p_group_id:groupId})
+  ]);
+  const me=(members||[]).find(member=>member.user_id===currentUser.id);
+  if(!group||messagesError||membersError||!me){
+    showToast('This private group is unavailable to your profile.');
+    window.evenitActiveGroupId=null;
+    setPage('messages');
+    return;
+  }
+  const title=group.name||'Group';
+  const canManage=['owner','admin'].includes(me.role);
+  const visibleMembers=members.slice(0,7);
+  const memberSummary=visibleMembers.map(member=>`<span class="group-member-chip" title="${escapeHtml(member.full_name||member.username||'Member')}"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><b>${escapeHtml((member.full_name||member.username||'M').slice(0,1))}</b></span>`).join('')+(members.length>visibleMembers.length?`<span class="group-member-more">+${members.length-visibleMembers.length}</span>`:'');
+  const membersHtml=members.map(member=>`<div class="group-member-row"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><strong>${escapeHtml(member.full_name||member.username||'Member')}</strong><small>@${escapeHtml(member.username||'member')} · ${escapeHtml(member.role)}</small></div>${canManage&&member.user_id!==currentUser.id&&member.role!=='owner'?`<button type="button" class="group-member-remove" data-remove-group-member="${escapeHtml(member.user_id)}">Remove</button>`:''}</div>`).join('');
+  pageView.innerHTML=`<section class="insights-page group-chat-page" data-group-thread="${escapeHtml(groupId)}"><button class="back-link" id="back-from-group">← Messages</button><div class="insights-header"><div><p class="overline">Private group</p><h2>${escapeHtml(title)}</h2><p style="color:#6E6E73;font-size:12px">${escapeHtml(group.description||'Only added members can read and reply here.')}</p></div><span style="background:#F2F0FF;color:#5E5CE6;border-radius:999px;padding:8px 12px;font:700 11px -apple-system,sans-serif">Private</span></div><section class="group-members-panel"><div class="group-members-heading"><div><strong>${members.length}/${group.max_members} members</strong><small>Only these profiles can see this group.</small></div><div class="group-member-chips">${memberSummary}</div></div>${canManage?`<details class="group-member-manager"><summary>Manage members <span>⌄</span></summary><div class="group-invite-control"><label for="group-add-search">Add a profile</label><input id="group-add-search" autocomplete="off" placeholder="Search name or @username" maxlength="80"><div id="group-invite-results" class="group-invite-results" aria-live="polite"></div></div><div class="group-member-list">${membersHtml}</div></details>`:''}</section><div class="group-thread" id="group-messages-${escapeHtml(groupId)}">${!messages||!messages.length?'<div class="group-thread-empty">No messages yet. Start the conversation.</div>':messages.map(message=>`<article class="group-bubble ${message.user_id===currentUser.id?'mine':''}"><div class="group-bubble-author">${message.user_id===currentUser.id?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${formatPostTime(message.created_at)}</small></article>`).join('')}</div><form id="group-message-form" class="group-message-form"><input id="group-message-input" placeholder="Message ${escapeHtml(title)}" maxlength="1000" required><button type="submit" class="publish-button">Send</button></form></section>`;
+  document.querySelector('#back-from-group').onclick=()=>{window.evenitActiveGroupId=null;setPage('messages');};
   document.querySelector('#group-message-form').onsubmit=async (e)=>{
     e.preventDefault();
     const input=document.querySelector('#group-message-input');
     const body=input.value.trim(); if(!body) return;
     const {error}=await supabase.from('group_messages').insert({group_id:groupId, user_id:currentUser.id, body});
     if(error){ showToast(error.message); return; }
-    input.value=''; openGroup(groupId);
+    input.value=''; await Promise.all([openGroup(groupId),loadGroups()]);
   };
+  document.querySelectorAll('[data-remove-group-member]').forEach(button=>button.onclick=async()=>{
+    button.disabled=true;
+    const {data,error}=await supabase.rpc('remove_group_member',{p_group_id:groupId,p_user_id:button.dataset.removeGroupMember});
+    if(error||data?.error){showToast(data?.error||error?.message||'Could not remove this profile');button.disabled=false;return;}
+    showToast('Member removed');
+    await Promise.all([openGroup(groupId),loadGroups()]);
+  });
+  const search=document.querySelector('#group-add-search');
+  const results=document.querySelector('#group-invite-results');
+  let searchTimer;
+  search?.addEventListener('input',()=>{
+    clearTimeout(searchTimer);
+    const query=search.value.trim();
+    if(query.length<2){results.innerHTML=query?'Keep typing…':'';return;}
+    results.innerHTML='Searching…';
+    searchTimer=setTimeout(async()=>{
+      const {data,error}=await supabase.rpc('search_group_invitees',{p_group_id:groupId,p_query:query});
+      if(search.value.trim()!==query)return;
+      if(error){results.innerHTML='<span>Could not search profiles.</span>';return;}
+      results.innerHTML=data?.length?data.map(profile=>`<button type="button" data-add-group-member="${escapeHtml(profile.id)}"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><span><strong>${escapeHtml(profile.full_name||profile.username||'Member')}</strong><small>@${escapeHtml(profile.username||'member')}</small></span><b>Add</b></button>`).join(''):'<span>No available profiles found.</span>';
+      results.querySelectorAll('[data-add-group-member]').forEach(button=>button.onclick=async()=>{
+        button.disabled=true;
+        const {data:result,error:addError}=await supabase.rpc('add_group_member',{p_group_id:groupId,p_user_id:button.dataset.addGroupMember});
+        if(addError||result?.error){showToast(result?.error||addError?.message||'Could not add this profile');button.disabled=false;return;}
+        showToast(result.status==='already_member'?'Already in this group':'Profile added to the group');
+        await Promise.all([openGroup(groupId),loadGroups()]);
+      });
+    },240);
+  });
 }
 function renderGroups(){
   const list=document.querySelector('#groups-list');
@@ -1719,7 +1752,35 @@ document.querySelector('#group-form')?.addEventListener('submit', async e=>{
   e.target.reset();
   renderGroups();
 });
-function loadGroupMessagesPreview(){ /* placeholder for messages preview */ }
+async function loadMessageInbox(){
+  const list=document.querySelector('#msg-primary-pane .message-list');
+  const count=document.querySelector('[data-msg-tab="primary"] small');
+  if(!list)return;
+  document.querySelector('#msg-primary-pane > .message-note')?.remove();
+  if(!supabase||!currentUser){
+    list.innerHTML='<div class="empty-message">Log in to see your conversations.</div>';
+    if(count)count.textContent='0';
+    return;
+  }
+  list.innerHTML='<div class="empty-message">Loading conversations…</div>';
+  const {data,error}=await supabase.rpc('get_direct_message_inbox');
+  if(error){
+    list.innerHTML=`<div class="empty-message">Messages could not load.<br><span>${escapeHtml(error.message)}</span></div>`;
+    if(count)count.textContent='0';
+    return;
+  }
+  if(count)count.textContent=String(data?.length||0);
+  if(!data?.length){
+    list.innerHTML='<div class="message-note"><span>✦</span><div><strong>No conversations yet</strong><p>Open a public profile and choose Message to start a private chat.</p></div></div>';
+    return;
+  }
+  list.innerHTML=data.map(conversation=>`<button class="message" type="button" data-open-direct="${escapeHtml(conversation.other_id)}"><img src="${escapeHtml(conversation.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><strong>${escapeHtml(conversation.full_name||conversation.username||'Evenit member')}</strong><p>${conversation.last_sender_id===currentUser.id?'You: ':''}${escapeHtml(conversation.last_body||'')}</p></div><small>${escapeHtml(formatPostTime(conversation.last_at))}</small></button>`).join('');
+  list.querySelectorAll('[data-open-direct]').forEach(button=>button.onclick=()=>{
+    const conversation=data.find(item=>item.other_id===button.dataset.openDirect);
+    if(conversation)openDirectConversation({id:conversation.other_id,username:conversation.username,full_name:conversation.full_name,avatar_url:conversation.avatar_url,is_private:false});
+  });
+}
+function loadGroupMessagesPreview(){ loadMessageInbox(); }
 
 // Comment sheet wiring
 document.querySelector('#close-comments')?.addEventListener('click', closeComments);
@@ -1847,10 +1908,13 @@ function scheduleEvenitLiveRefresh(kind){
     if(kind==='aftermath'&&pageView.hidden)loadAftermathFeed();
     if(kind==='notifications'&&activePage==='notifications')renderNotifications();
     if(kind==='messages'){
-      if(typeof window.refreshEvenitDirectThread==='function')window.refreshEvenitDirectThread();
-      else if(activePage==='messages')showToast('You have a new message');
+      if(pageView?.querySelector('.direct-message-page')&&typeof window.refreshEvenitDirectThread==='function')window.refreshEvenitDirectThread();
+      else if(activePage==='messages'){loadMessageInbox();showToast('You have a new message');}
     }
-    if(kind==='groups'&&window.evenitActiveGroupId)openGroup(window.evenitActiveGroupId);
+    if(kind==='groups'){
+      if(pageView?.querySelector('[data-group-thread]')&&window.evenitActiveGroupId)openGroup(window.evenitActiveGroupId);
+      else if(activePage==='messages'||activePage==='groups')loadGroups();
+    }
   },260);
 }
 function subscribeToEvenitLiveUpdates(){
@@ -1871,6 +1935,7 @@ function subscribeToEvenitLiveUpdates(){
     .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('notifications'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'group_messages'},()=>scheduleEvenitLiveRefresh('groups'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'group_members',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('groups'))
     .subscribe();
 }
 if(supabase){
