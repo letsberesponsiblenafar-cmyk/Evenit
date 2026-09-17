@@ -15,6 +15,7 @@ let activeInsightsPlanId=null;
 let currentLocation=null;
 let collegeVerificationReady=false;
 let navHistory=[];
+const planCoverStyles=new Set(['aurora','coffee','outdoors','studio','sunset','ocean','citrus','midnight','bloom','paper','ember','mono']);
 function pushNav(from){navHistory.push(from);if(navHistory.length>10)navHistory.shift()}
 function pushAppView(view){window.history.pushState({...window.history.state,evenitAppView:view},'',window.location.href)}
 function insightsReturnState(planId){return{...(window.history.state||{}),evenitNavigation:true,route:{kind:'insights',planId,from:{kind:'page',page:'profile',tab:'your-plans'}}}}
@@ -546,25 +547,43 @@ document.querySelectorAll('.save').forEach(btn=>{
   };
 });document.querySelectorAll('.share').forEach(btn=>btn.onclick=async()=>{
   const post=posts[btn.dataset.index];
-  const url=`${window.location.origin}${window.location.pathname}#plan-${post.id||post.title}`;
-  const sheet=document.querySelector('#share-sheet');
-  const urlEl=document.querySelector('#share-url');
-  if(urlEl) urlEl.textContent=url;
-  sheet?.classList.add('open');
-  if(post.id) recordPlanInteraction(post.id,'share');
-  try{ navigator.vibrate?.(10); }catch{}
-});
-document.querySelector('#close-share')?.addEventListener('click',()=>document.querySelector('#share-sheet')?.classList.remove('open'));
-document.querySelector('#share-sheet')?.addEventListener('click',e=>{ if(e.target.id==='share-sheet') e.currentTarget.classList.remove('open'); });
-document.querySelectorAll('.share-option').forEach(b=>b.onclick=async()=>{
-  const kind=b.dataset.share;
-  const url=document.querySelector('#share-url')?.textContent||window.location.href;
-  if(kind==='copy'){ try{ await navigator.clipboard.writeText(url); showToast('Link copied ✓'); }catch{ showToast(url); } }
-  else if(kind==='native'){ try{ if(navigator.share) await navigator.share({title:document.title, url}); else throw 0; }catch{ try{await navigator.clipboard.writeText(url); showToast('Link copied');}catch{ showToast('Share coming soon'); } } }
-  else if(kind==='whatsapp'){ window.open(`https://wa.me/?text=${encodeURIComponent(url)}`,'_blank'); }
-  else if(kind==='message'){ window.location.href=`sms:?&body=${encodeURIComponent(url)}`; }
-  document.querySelector('#share-sheet')?.classList.remove('open');
+  openEvenitShare({type:'event',id:post?.id,title:post?.title,text:`Have a look at ${post?.title||'this plan'} on Evenit.`});
 });document.querySelectorAll('.comment').forEach(btn=>btn.onclick=()=>addPlanComment(btn.dataset.index));document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));document.querySelectorAll('.more').forEach(btn=>btn.onclick=()=>showToast('More event actions are coming next ✦'));document.querySelectorAll('.post-visual[data-plan-id]').forEach(visual=>visual.onclick=()=>recordPlanInteraction(visual.dataset.planId,'click'));trackPostImpressions()}
+
+let activeEvenitShare=null;
+function evenitShareUrl(type,id){
+  const url=new URL(window.location.href);
+  url.search='';
+  url.hash=type==='profile'?`public-profile/${encodeURIComponent(id)}`:`event/${encodeURIComponent(id)}`;
+  return url.href;
+}
+function openEvenitShare({type='event',id,title,text}={}){
+  if(!id){showToast('This item is not ready to share yet.');return;}
+  const url=evenitShareUrl(type,id);
+  const itemName=title||'Evenit';
+  activeEvenitShare={url,title:itemName,text:text||`Have a look at ${itemName} on Evenit.`};
+  const sheet=document.querySelector('#share-sheet');
+  const heading=document.querySelector('#share-sheet-title');
+  const intro=sheet?.querySelector('.share-intro');
+  const urlEl=document.querySelector('#share-url');
+  if(heading)heading.textContent=type==='profile'?'Share this profile':'Share this event';
+  if(intro)intro.textContent=type==='profile'?'Send this person’s public Evenit profile.':'Send this event and let people view its details or show interest.';
+  if(urlEl)urlEl.textContent=url;
+  sheet?.classList.add('open');
+  sheet?.querySelectorAll('.share-option').forEach(button=>button.onclick=async()=>{
+    const kind=button.dataset.share;
+    const share=activeEvenitShare||{url:window.location.href,title:document.title,text:''};
+    if(kind==='copy'){try{await navigator.clipboard.writeText(share.url);showToast('Link copied ✓');}catch{showToast(share.url);}}
+    else if(kind==='native'){try{if(!navigator.share)throw new Error('Sharing is unavailable');await navigator.share({title:share.title,text:share.text,url:share.url});}catch(error){if(error?.name==='AbortError')return;try{await navigator.clipboard.writeText(share.url);showToast('Link copied');}catch{showToast('Copy the link above to share it.');}}}
+    else if(kind==='whatsapp'){window.open(`https://wa.me/?text=${encodeURIComponent(`${share.text}\n${share.url}`)}`,'_blank','noopener');}
+    else if(kind==='message'){window.location.href=`sms:?&body=${encodeURIComponent(`${share.text}\n${share.url}`)}`;}
+    sheet.classList.remove('open');
+  });
+  if(type==='event')recordPlanInteraction(id,'share');
+  try{navigator.vibrate?.(10);}catch{}
+}
+document.querySelector('#close-share')?.addEventListener('click',()=>document.querySelector('#share-sheet')?.classList.remove('open'));
+document.querySelector('#share-sheet')?.addEventListener('click',e=>{if(e.target.id==='share-sheet')e.currentTarget.classList.remove('open');});
 renderPosts();
 const pageView=document.querySelector('#page-view');
 const isPublicProfileOpen=()=>Boolean(pageView?.dataset.publicProfileViewId&&pageView.querySelector('.public-profile-page'));
@@ -1165,6 +1184,7 @@ renderPublicProfile=async function(profileId,{restore=false}={}){
   pageView.querySelectorAll('[data-public-plan-interest]').forEach(button=>button.addEventListener('click',event=>{event.preventDefault();requestPlanInterest(plansById.get(button.dataset.publicPlanInterest),button);}));
   pageView.querySelectorAll('[data-public-plan-dismiss]').forEach(button=>button.addEventListener('click',async()=>{if(!currentUser){loginModal?.classList.add('open');showToast('Log in to refine your recommendations');return;}const post=plansById.get(button.dataset.publicPlanDismiss);if(!post)return;button.disabled=true;const {error}=await supabase.from('plan_swipes').upsert({plan_id:post.id,user_id:currentUser.id,interested:false},{onConflict:'plan_id,user_id'});if(error){button.disabled=false;showToast(`Could not update this event: ${error.message}`);return;}post.swipeInterest=false;post.interested=false;button.closest('[data-public-plan-card]')?.remove();showToast('Not interested — we will show you less like this.');}));
 };
+window.openEvenitPublicProfile=(profileId,options={})=>renderPublicProfile(profileId,options);
 	 document.addEventListener('click',e=>{const insights=e.target.closest('[data-insights-id]');if(insights){e.preventDefault();e.stopImmediatePropagation();renderInsights(insights.dataset.insightsId);return}const profile=e.target.closest('[data-public-profile-id],[data-profile-id]');if(profile&&profile.dataset.profileId||profile&&profile.dataset.publicProfileId){e.preventDefault();e.stopImmediatePropagation();renderPublicProfile(profile.dataset.publicProfileId||profile.dataset.profileId)}},true);
  if(supabase)supabase.auth.onAuthStateChange(()=>loadPlans());
   document.querySelectorAll('[data-page]').forEach(link=>link.addEventListener('click',()=>setTimeout(()=>{applyAdminContent();applyAdminStyles();refreshPageCopy()},150)));
@@ -1927,11 +1947,14 @@ function renderHomeEventCards(){
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;
     const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
-    const coverStyle=['aurora','coffee','outdoors','studio'].includes(post.coverStyle)?post.coverStyle:'aurora';
+    const coverStyle=planCoverStyles.has(post.coverStyle)?post.coverStyle:'aurora';
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
-      <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
-        <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
-        <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
+      <header class="home-event-host">
+        <button class="home-event-profile" type="button" data-profile-id="${escapeHtml(post.user_id||'')}" aria-label="Open ${escapeHtml(post.name)}'s profile">
+          <img src="${escapeHtml(post.avatar)}" alt="">
+          <span><strong>${escapeHtml(post.user)}</strong><small>${escapeHtml(post.category||'Community event')}</small></span>
+        </button>
+        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">↗</button>
       </header>
       <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
         ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
@@ -2288,11 +2311,14 @@ renderHomeEventCards=function(){
     const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} confirmed`;
     const buttonLabel=isOwner?'Your event':post.membershipStatus==='confirmed'?'Joined ✓':post.membershipStatus==='waitlisted'?'Waitlisted':post.membershipStatus==='interested'?'Request sent':isPast?'Event ended':'Interested';
     const disabled=isOwner||isMember||isPast;
-    const coverStyle=['aurora','coffee','outdoors','studio'].includes(post.coverStyle)?post.coverStyle:'aurora';
+    const coverStyle=planCoverStyles.has(post.coverStyle)?post.coverStyle:'aurora';
     return `<article class="home-event-card" data-plan-index="${index}" data-plan-id="${escapeHtml(post.id||'')}">
-      <header class="home-event-host" data-profile-id="${escapeHtml(post.user_id||'')}">
-        <img src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}">
-        <div><strong>${escapeHtml(post.user)}</strong><span>${escapeHtml(post.category||'Community event')}</span></div>
+      <header class="home-event-host">
+        <button class="home-event-profile" type="button" data-profile-id="${escapeHtml(post.user_id||'')}" aria-label="Open ${escapeHtml(post.name)}'s profile">
+          <img src="${escapeHtml(post.avatar)}" alt="">
+          <span><strong>${escapeHtml(post.user)}</strong><small>${escapeHtml(post.category||'Community event')}</small></span>
+        </button>
+        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">↗</button>
       </header>
       <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
         ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
@@ -2309,6 +2335,11 @@ renderHomeEventCards=function(){
     </article>`;
   }).join('')||'<div class="aftermath-empty"><div class="aftermath-empty-icon">◌</div><h3>No events yet</h3><p>New plans will appear here as soon as they are published.</p></div>';
   document.querySelectorAll('[data-home-join]').forEach(button=>button.addEventListener('click',()=>startHomeJoin(Number(button.dataset.homeJoin),button)));
+  document.querySelectorAll('[data-home-share]').forEach(button=>button.addEventListener('click',event=>{
+    event.preventDefault();event.stopPropagation();
+    const post=posts[Number(button.dataset.homeShare)];
+    openEvenitShare({type:'event',id:post?.id,title:post?.title,text:`Have a look at ${post?.title||'this plan'} on Evenit.`});
+  }));
   enhanceHomePlanCards();
 };
 
@@ -2711,15 +2742,9 @@ function activatePremiumProfileTab(view,{motion=false}={}){
   renderProfileTab(tab);
 }
 
-async function shareCurrentProfile(){
+function shareCurrentProfile(){
   if(!currentUser?.id)return;
-  const url=`${window.location.origin}${window.location.pathname}?profile=${encodeURIComponent(currentUser.id)}#profile`;
-  const title=`${currentUser.user_metadata?.full_name||'My'} Evenit profile`;
-  try{
-    if(navigator.share){await navigator.share({title,text:'Find my plans and updates on Evenit.',url});return;}
-    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);showToast('Profile link copied');return;}
-    showToast('Profile link is ready to share');
-  }catch(error){if(error?.name!=='AbortError')showToast('Could not open sharing. Please try again.');}
+  openEvenitShare({type:'profile',id:currentUser.id,title:`${currentUser.user_metadata?.full_name||'My'} Evenit profile`,text:'Find my plans and updates on Evenit.'});
 }
 
 function wirePremiumProfileInteractions(){
@@ -2827,11 +2852,11 @@ window.addEventListener('popstate',()=>{
   if(publicEventSource&&document.querySelector('.public-event-page'))restorePublicEventSource();
 });
 
-async function openPublicEventDetails(planId,fallback={}){
+async function openPublicEventDetails(planId,fallback={},options={}){
   if(!planId){showToast('This event is no longer available.');return;}
   const activePage=pageView.hidden?'home':(document.querySelector('[data-page].active')?.dataset.page||'discover');
   publicEventSource={page:activePage,tab:activePage==='profile'?'lived':null};
-  window.history.pushState({...window.history.state,evenitPublicEvent:true},'',window.location.href);
+  if(!options.restore)window.history.pushState({...window.history.state,evenitPublicEvent:true},'',window.location.href);
   homeElements.forEach(element=>element.hidden=true);
   pageView.hidden=false;
   document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
@@ -2852,6 +2877,8 @@ async function openPublicEventDetails(planId,fallback={}){
   pageView.innerHTML=`<section class="public-event-page"><span class="public-event-kicker">Lived</span><h2>${escapeHtml(plan.title||'Event details')}</h2><p class="public-event-lead">Everything the host chose to make public about this event.</p><div class="public-event-detail-grid"><section><span>When</span><strong>${escapeHtml(when)}</strong></section><section><span>Where</span><a href="${mapUrl(plan.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(plan.location||'Location to be announced')} ↗</a></section><section><span>Attendance</span><strong>${escapeHtml(attendance)}</strong></section></div>${plan.caption?`<section class="public-event-note"><h3>About this event</h3><p>${escapeHtml(plan.caption)}</p></section>`:''}<p class="public-event-privacy">Private requests, guest answers, and host insights are not shown here.</p>${canRequest?'<button class="public-event-join" type="button" data-public-event-join>Request to join</button>':''}</section>`;
   pageView.querySelector('[data-public-event-join]')?.addEventListener('click',event=>requestPlanInterest(known,event.currentTarget));
 }
+
+window.openEvenitPublicEvent=(planId,options={})=>openPublicEventDetails(planId,{},options);
 
 document.addEventListener('click',event=>{
   const eventLink=event.target.closest('[data-aftermath-event]');

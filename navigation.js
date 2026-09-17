@@ -22,6 +22,7 @@
     const parts=decodeURIComponent(window.location.hash.replace(/^#/,'')).split('/');
     if(parts[0]==='insights'&&parts[1])return{kind:'insights',planId:parts[1],from:pageRoute('home')};
     if(parts[0]==='public-profile'&&parts[1])return{kind:'public-profile',profileId:parts[1],from:pageRoute('home')};
+    if(parts[0]==='event'&&parts[1])return{kind:'public-event',planId:parts[1],from:pageRoute('home')};
     if(parts[0]==='profile'&&parts[1])return pageRoute('profile',parts[1]);
     return pageRoute(parts[0]);
   }
@@ -29,6 +30,7 @@
   function routeHash(route){
     if(route.kind==='insights')return`#insights/${encodeURIComponent(route.planId)}`;
     if(route.kind==='public-profile')return`#public-profile/${encodeURIComponent(route.profileId)}`;
+    if(route.kind==='public-event')return`#event/${encodeURIComponent(route.planId)}`;
     if(route.page==='profile'&&route.tab&&route.tab!=='your-plans')return`#profile/${encodeURIComponent(route.tab)}`;
     return`#${route.page||'home'}`;
   }
@@ -95,6 +97,16 @@
   function activateRoute(route,done){
     if(!route){if(done)done();return}
     if(route.kind==='page'){activatePage(route,done);return}
+    if(route.kind==='public-event'){
+      if(typeof window.openEvenitPublicEvent==='function')window.openEvenitPublicEvent(route.planId,{restore:true});
+      if(done)setTimeout(done,0);
+      return;
+    }
+    if(route.kind==='public-profile'){
+      if(typeof window.openEvenitPublicProfile==='function')window.openEvenitPublicProfile(route.profileId,{restore:true});
+      if(done)setTimeout(done,0);
+      return;
+    }
     activateRoute(route.from||pageRoute('home'),()=>{
       const expected=++transition;
       const retry=attempt=>{

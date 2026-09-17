@@ -32,7 +32,7 @@
     const stamp=document.querySelector('.composer-stamp');
     if(stamp)stamp.innerHTML='<span>EVENIT</span><strong>MAKE<br>IT HAPPEN</strong><small>Every good plan<br>starts here</small>';
     const steps=document.querySelector('.composer-steps');
-    if(steps)steps.innerHTML='<span class="active"><b>01</b> Basics</span><span><b>02</b> Scene</span><span><b>03</b> Guest questions</span><span><b>04</b> Entry</span>';
+    if(steps)steps.innerHTML='<span class="active"><b>01</b> Plan details</span><span><b>02</b> Cover &amp; preview</span>';
     const requestPreview=preview.requests?.parentElement;
     if(requestPreview){requestPreview.querySelector('span').textContent='REQUESTS';preview.requests.id='preview-requests';}
   }
@@ -62,6 +62,18 @@
   }
 
   setComposerCopy();mountQuestionSection();
+  const coverStyles=[
+    ['aurora','Aurora','Easygoing'],['coffee','Coffee','Warm & social'],['outdoors','Outdoors','Fresh air'],['studio','Studio','Creative'],
+    ['sunset','Sunset','Golden hour'],['ocean','Ocean','Clear-minded'],['citrus','Citrus','Bright energy'],['midnight','Midnight','After dark'],
+    ['bloom','Bloom','Soft & playful'],['paper','Paper','Thoughtful'],['ember','Ember','Bold & warm'],['mono','Mono','Minimal']
+  ];
+  function mountCoverChoices(){
+    const grid=form.querySelector('.cover-style-grid');
+    if(!grid)return;
+    const selected=grid.querySelector('input[name="cover_style"]:checked')?.value||'aurora';
+    grid.innerHTML=coverStyles.map(([value,label,description])=>`<label class="cover-style cover-style-${value}"><input type="radio" name="cover_style" value="${value}" ${value===selected?'checked':''}><span><b>${label}</b><small>${description}</small></span></label>`).join('');
+  }
+  mountCoverChoices();
   const coverUpload=document.querySelector('#plan-cover-upload');
   const coverStatus=document.querySelector('#plan-cover-status');
   const previewPoster=document.querySelector('.preview-poster');
@@ -87,6 +99,46 @@
   }
   coverUpload?.addEventListener('change',updateCoverPreview);
   form.querySelectorAll('input[name="cover_style"]').forEach(input=>input.addEventListener('change',updateCoverPreview));
+  function mountComposerSlides(){
+    const basics=form.querySelector(':scope > fieldset.composer-section');
+    const coverPicker=basics?.querySelector('.plan-cover-picker');
+    const firstActions=form.querySelector(':scope > .composer-actions');
+    const previewPanel=document.querySelector('.composer-preview');
+    const layout=document.querySelector('.composer-layout');
+    const steps=document.querySelector('.composer-steps');
+    if(!basics||!coverPicker||!firstActions||!previewPanel||!layout)return {showDetails:()=>{}};
+    const detailSections=[...form.querySelectorAll(':scope > fieldset.composer-section')];
+    const next=firstActions.querySelector('.publish-button');
+    next.type='button';next.id='next-plan-cover';next.innerHTML='Next <span>→</span>';
+    firstActions.querySelector('p').innerHTML='<span class="pulse-dot"></span>Choose a cover and preview your plan next.';
+    const coverStep=document.createElement('section');
+    coverStep.className='composer-cover-step';
+    coverStep.innerHTML='<header class="composer-cover-step-heading"><p class="overline">Step 02</p><h3>Choose the mood.</h3><p>This is how your event will appear on the home board.</p></header>';
+    coverStep.append(coverPicker);
+    const reviewActions=document.createElement('div');
+    reviewActions.className='composer-review-actions';
+    reviewActions.innerHTML='<button type="button" class="composer-back-button" id="back-to-plan-details">← Plan details</button><button class="publish-button" type="submit">Create plan <span>→</span></button>';
+    coverStep.append(reviewActions);
+    firstActions.after(coverStep);
+    function setSlide(slide){
+      const onCover=slide==='cover';
+      detailSections.forEach(section=>section.hidden=onCover);
+      firstActions.hidden=onCover;
+      coverStep.hidden=!onCover;
+      previewPanel.hidden=!onCover;
+      layout.classList.toggle('is-cover-step',onCover);
+      steps?.querySelectorAll('span').forEach((step,index)=>step.classList.toggle('active',index===(onCover?1:0)));
+      document.querySelector('.composer-modal')?.scrollTo({top:0,behavior:'smooth'});
+    }
+    next.addEventListener('click',()=>{
+      if(!form.checkValidity()){form.reportValidity();return;}
+      updatePreview();updateCoverPreview();setSlide('cover');
+    });
+    coverStep.querySelector('#back-to-plan-details')?.addEventListener('click',()=>setSlide('details'));
+    setSlide('details');
+    return {showDetails:()=>setSlide('details')};
+  }
+  const composerSlides=mountComposerSlides();
   const questionList=document.querySelector('#plan-question-list');
   const questionEmpty=document.querySelector('#plan-question-empty');
   const addQuestion=document.querySelector('#add-plan-question');
@@ -147,6 +199,6 @@
   });
   document.addEventListener('click',event=>{if(event.target.closest('#open-modal,#profile-post'))document.querySelector('.sidebar')?.classList.remove('mobile-open');},true);
   form.addEventListener('input',updatePreview);form.addEventListener('change',updatePreview);
-  form.addEventListener('reset',()=>requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}updateQuestionControls();updatePreview();updateCoverPreview();}));
+  form.addEventListener('reset',()=>requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}composerSlides.showDetails();updateQuestionControls();updatePreview();updateCoverPreview();}));
   updateQuestionControls();updatePreview();updateCoverPreview();
 })();
