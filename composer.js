@@ -9,6 +9,7 @@
   };
   const usePlanLocation=document.querySelector('#use-plan-location');
   const planLocationStatus=document.querySelector('#plan-location-status');
+  let locationRequest=0;
 
   function formatDate(value){
     if(!value)return'Choose a date';
@@ -120,7 +121,9 @@
     reviewActions.innerHTML='<button type="button" class="composer-back-button" id="back-to-plan-details">← Plan details</button><button class="publish-button" type="submit">Create plan <span>→</span></button>';
     coverStep.append(reviewActions);
     firstActions.after(coverStep);
+    let activeSlide='details';
     function setSlide(slide){
+      activeSlide=slide;
       const onCover=slide==='cover';
       detailSections.forEach(section=>section.hidden=onCover);
       firstActions.hidden=onCover;
@@ -131,10 +134,22 @@
       document.querySelector('.composer-modal')?.scrollTo({top:0,behavior:'smooth'});
     }
     next.addEventListener('click',()=>{
+      validateQuestionFields();
       if(!form.checkValidity()){form.reportValidity();return;}
       updatePreview();updateCoverPreview();setSlide('cover');
     });
     coverStep.querySelector('#back-to-plan-details')?.addEventListener('click',()=>setSlide('details'));
+    // Pressing Enter in a details field must continue to the review step,
+    // rather than activating the hidden final submit button.
+    form.addEventListener('submit',event=>{
+      if(activeSlide==='cover')return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      next.click();
+    },true);
+    form.addEventListener('invalid',event=>{
+      if(detailSections.some(section=>section.contains(event.target)))setSlide('details');
+    },true);
     setSlide('details');
     return {showDetails:()=>setSlide('details')};
   }
@@ -143,12 +158,24 @@
   const questionEmpty=document.querySelector('#plan-question-empty');
   const addQuestion=document.querySelector('#add-plan-question');
   const questionTypes={short_text:'Short answer',long_text:'Long answer',multiple_choice:'Multiple choice',checkboxes:'Checkboxes'};
+  const questionOptionDrafts=new WeakMap();
   const questionRows=()=>[...questionList?.querySelectorAll('.plan-question-row')||[]];
+  function validateQuestionFields(){
+    questionRows().forEach(row=>{
+      const prompt=row.querySelector('[data-plan-question]');
+      const type=row.querySelector('[data-plan-question-type]').value;
+      const choices=[...row.querySelectorAll('[data-question-option]')].filter(input=>input.value.trim());
+      const message=!prompt.value.trim()?'Enter your question, or remove it.':
+        ['multiple_choice','checkboxes'].includes(type)&&choices.length<2?'Add at least two answer options.':'';
+      prompt.setCustomValidity(message);
+    });
+  }
   function updateQuestionControls(){
     const rows=questionRows();
     if(addQuestion){addQuestion.disabled=rows.length>=10;addQuestion.textContent=rows.length>=10?'10 questions added':'＋ Add question';}
     if(questionEmpty)questionEmpty.hidden=rows.length>0;
     rows.forEach((row,index)=>row.querySelector('.question-number').textContent=String(index+1).padStart(2,'0'));
+    validateQuestionFields();
     updatePreview();
   }
   function addOption(row,value=''){
@@ -156,6 +183,7 @@
     if(!options||options.querySelectorAll('[data-question-option]').length>=10)return;
     const option=document.createElement('div');option.className='question-option-row';
     const input=document.createElement('input');input.type='text';input.maxLength=120;input.placeholder=`Option ${options.querySelectorAll('[data-question-option]').length+1}`;input.dataset.questionOption='';input.value=value;
+    input.setAttribute('aria-label',input.placeholder);
     const remove=document.createElement('button');remove.type='button';remove.className='remove-question-option';remove.setAttribute('aria-label','Remove option');remove.textContent='×';
     option.append(input,remove);options.append(option);
   }
@@ -172,33 +200,42 @@
     const row=document.createElement('article');row.className='plan-question-row';
     row.innerHTML='<div class="question-row-top"><span class="question-number">01</span><label class="question-prompt"><span class="sr-only">Question prompt</span><input data-plan-question type="text" maxlength="280" placeholder="Ask a question"></label><label class="question-type"><span class="sr-only">Answer type</span><select data-plan-question-type><option value="short_text">Short answer</option><option value="long_text">Long answer</option><option value="multiple_choice">Multiple choice</option><option value="checkboxes">Checkboxes</option></select></label></div><div class="question-options-editor" hidden></div><div class="question-row-footer"><label class="question-required"><input data-plan-question-required type="checkbox" checked><span>Required</span></label><button type="button" class="remove-plan-question" aria-label="Remove this question">Remove</button></div>';
     const prompt=row.querySelector('[data-plan-question]');const type=row.querySelector('[data-plan-question-type]');
+    prompt.required=true;
     prompt.value=question.prompt||'';type.value=questionTypes[question.type]?question.type:'short_text';row.querySelector('[data-plan-question-required]').checked=question.required!==false;
-    type.addEventListener('change',()=>{renderOptions(row);updateQuestionControls();});prompt.addEventListener('input',updatePreview);
+    type.addEventListener('change',()=>{
+      const options=[...row.querySelectorAll('[data-question-option]')];
+      if(options.length)questionOptionDrafts.set(row,options.map(input=>input.value));
+      renderOptions(row,questionOptionDrafts.get(row)||[]);
+      updateQuestionControls();
+    });prompt.addEventListener('input',updatePreview);
     questionList.append(row);renderOptions(row,Array.isArray(question.options)?question.options:[]);updateQuestionControls();
   }
   addQuestion?.addEventListener('click',()=>addQuestionRow());
   questionList?.addEventListener('click',event=>{
     const row=event.target.closest('.plan-question-row');if(!row)return;
     if(event.target.closest('.remove-plan-question')){row.remove();updateQuestionControls();return;}
-    if(event.target.closest('.add-question-option')){addOption(row);return;}
-    if(event.target.closest('.remove-question-option'))event.target.closest('.question-option-row').remove();
+    if(event.target.closest('.add-question-option')){addOption(row);validateQuestionFields();return;}
+    if(event.target.closest('.remove-question-option')){event.target.closest('.question-option-row').remove();validateQuestionFields();}
   });
+  questionList?.addEventListener('input',validateQuestionFields);
   window.getPlanFormQuestions=()=>questionRows().map(row=>{
     const type=row.querySelector('[data-plan-question-type]').value;
     return{prompt:row.querySelector('[data-plan-question]').value.trim(),type,required:row.querySelector('[data-plan-question-required]').checked,options:[...row.querySelectorAll('[data-question-option]')].map(option=>option.value.trim()).filter(Boolean)};
-  }).filter(question=>question.prompt);
+  });
 
   usePlanLocation?.addEventListener('click',()=>{
     if(!navigator.geolocation){planLocationStatus.textContent='Current location is not available in this browser. Add the meeting place manually.';return;}
     usePlanLocation.disabled=true;usePlanLocation.textContent='Finding your location…';planLocationStatus.textContent='Waiting for your device location permission…';
+    const request=++locationRequest;
     navigator.geolocation.getCurrentPosition(position=>{
+      if(request!==locationRequest)return;
       const {latitude,longitude}=position.coords;form.elements.plan_latitude.value=String(latitude);form.elements.plan_longitude.value=String(longitude);
       if(!form.elements.where.value.trim())form.elements.where.value=`Current location · ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
       planLocationStatus.textContent='Current location selected. You can still edit the meeting-place name above.';usePlanLocation.disabled=false;usePlanLocation.textContent='✓ Current location selected';updatePreview();
-    },error=>{const message={1:'Location permission was not allowed.',2:'Your location is unavailable.',3:'Location lookup took too long.'}[error.code]||'Location lookup failed.';planLocationStatus.textContent=`${message} Add the meeting place manually instead.`;usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';},{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
+    },error=>{if(request!==locationRequest)return;const message={1:'Location permission was not allowed.',2:'Your location is unavailable.',3:'Location lookup took too long.'}[error.code]||'Location lookup failed.';planLocationStatus.textContent=`${message} Add the meeting place manually instead.`;usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';},{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
   });
   document.addEventListener('click',event=>{if(event.target.closest('#open-modal,#profile-post'))document.querySelector('.sidebar')?.classList.remove('mobile-open');},true);
   form.addEventListener('input',updatePreview);form.addEventListener('change',updatePreview);
-  form.addEventListener('reset',()=>requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}composerSlides.showDetails();updateQuestionControls();updatePreview();updateCoverPreview();}));
+  form.addEventListener('reset',()=>{locationRequest++;requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}composerSlides.showDetails();updateQuestionControls();updatePreview();updateCoverPreview();});});
   updateQuestionControls();updatePreview();updateCoverPreview();
 })();

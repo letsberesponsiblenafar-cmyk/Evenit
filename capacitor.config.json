@@ -3,7 +3,7 @@
   "appName": "Evenit",
   "webDir": "mobile/www",
   "server": {
-    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/?app=1.16",
+    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/?app=1.17",
     "androidScheme": "https",
     "allowNavigation": [
       "letsberesponsiblenafar-cmyk.github.io",

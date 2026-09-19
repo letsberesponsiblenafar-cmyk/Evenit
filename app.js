@@ -1,15 +1,17 @@
 (function(){
-let posts = [
-  {user:'maya.rose', name:'Maya Rose', avatar:'https://i.pravatar.cc/100?img=25', time:'2h', image:'pic-one', category:'Outdoors', title:'Sunset picnic', location:'Prospect Park · Today, 5:00 PM', caption:'The blanket is packed and the sky is looking promising. Bringing snacks, sketchbooks, and room for a few more. Who’s in? ✦', likes:128, comments:14, joined:false},
-  {user:'ari.makes', name:'Ari M.', avatar:'https://i.pravatar.cc/100?img=47', time:'5h', image:'pic-two', category:'Social', title:'Sunday people', location:'Red Hook · Sun, 10:30 AM', caption:'A little walk, a really good coffee, and some new neighborhood friends. Low-pressure plans are the best plans.', likes:86, comments:9, joined:false}
-];
+const icon=window.evenitIcon;
+let posts = [];
 const postsEl=document.querySelector('#posts');
 const hasSupabase=window.SUPABASE_URL&&!window.SUPABASE_URL.startsWith('YOUR_')&&window.SUPABASE_ANON_KEY&&!window.SUPABASE_ANON_KEY.startsWith('YOUR_');
 const supabase=hasSupabase&&window.supabase?.createClient?window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY):null;
 let currentUser=null;
-let savedEventIds=new Set(JSON.parse(localStorage.getItem('evenit-saved-events')||'[]'));
+function readStoredIds(key){
+  try{const value=JSON.parse(localStorage.getItem(key)||'[]');return new Set(Array.isArray(value)?value.filter(id=>typeof id==='string'):[]);}
+  catch{return new Set();}
+}
+let savedEventIds=readStoredIds('evenit-saved-events');
 let activeSavedCollection='plans';
-let joinedEventIds=new Set(JSON.parse(localStorage.getItem('evenit-joined-events')||'[]'));
+let joinedEventIds=readStoredIds('evenit-joined-events');
 let adminContent={};
 let activeInsightsPlanId=null;
 let currentLocation=null;
@@ -31,9 +33,16 @@ function goBack(){
 }
 window.addEventListener('popstate',event=>{
   const view=event.state?.evenitAppView;
+  if(activeWorkspace&&view?.type!=='workspace'){
+    restoreWorkspaceSurface(activeWorkspace);
+    activeWorkspace=null;
+    document.body.classList.remove('workspace-open');
+    pageView.classList.remove('workspace-view');
+  }
   if(view?.type==='host-scan-page'){openScanPage(view.planId,{restore:true});return;}
   if(isScanPageActive()||scanModal?.classList.contains('open'))closeScanModal({returnToInsights:false});
   if(!view){
+    if(event.state?.evenitNavigation)return;
     const route=decodeURIComponent(window.location.hash.replace(/^#/,''))||'home';
     const page=route.split('/')[0];
     if(page==='home')goHome();
@@ -47,8 +56,9 @@ window.addEventListener('popstate',event=>{
   if(view.type==='public-profile')renderPublicProfile(view.profileId,{restore:true});
   if(view.type==='public-profile-list')openPublicProfileConnectionList(view.profileId,view.list,{restore:true});
   if(view.type==='direct-message')openDirectConversation(view.profile,{restore:true});
+  if(view.type==='group-chat')openGroup(view.groupId,{restore:true});
   if(view.type==='host-request-review')openHostRequestReview(view.planId,view.userId,{restore:true});
-});
+},true);
 function goHome(){
   setInsightsDockScan(null);
   navHistory=[];
@@ -69,11 +79,19 @@ const rpcRow=data=>Array.isArray(data)?data[0]:data;
 async function recordPlanInteraction(planId,kind){if(!supabase||!planId)return;await supabase.rpc('record_plan_interaction',{p_plan_id:planId,p_kind:kind,p_session_id:analyticsSessionId})}
 async function trackPostImpressions(){if(!window.IntersectionObserver)return;const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){recordPlanInteraction(entry.target.dataset.planId,'impression');observer.unobserve(entry.target)}}),{threshold:.45});document.querySelectorAll('[data-plan-id].post').forEach(post=>observer.observe(post))}
  function updateMobileHeader(page){const activePage=page||document.querySelector('[data-page].active')?.dataset.page||'home';const mobileLogin=document.querySelector('#open-login-mobile');const mobileMenu=document.querySelector('#mobile-menu');if(mobileLogin)mobileLogin.hidden=Boolean(currentUser);if(mobileMenu)mobileMenu.hidden=activePage!=='profile';}
- function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.textContent='EV'}updateMobileHeader()}
+ function updateAccountUI(){const loginButton=document.querySelector('#open-login');const navAvatar=document.querySelector('#nav-avatar');if(currentUser){const name=currentUser.user_metadata?.full_name||currentUser.email?.split('@')[0]||'Evenit member';const avatar=currentUser.user_metadata?.avatar_url;loginButton.hidden=true;navAvatar.textContent=name.slice(0,2).toUpperCase();if(avatar)navAvatar.innerHTML=`<img src="${avatar}" alt="">`}else{loginButton.hidden=false;navAvatar.innerHTML=icon('profile')}updateMobileHeader()}
 const mapUrl=place=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
 async function refreshCollegeVerification(){if(!supabase||!currentUser){collegeVerificationReady=false;return false}const {data}=await supabase.from('profiles').select('college,enrollment_id').eq('id',currentUser.id).maybeSingle();collegeVerificationReady=Boolean(String(data?.college||'').trim()&&String(data?.enrollment_id||'').trim());return collegeVerificationReady}
-async function loadPlans(){if(!supabase)return;if(currentUser)await refreshCollegeVerification();const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,tagline,image_url,cover_style,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult,swipeResult,accessResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_verification_access').select('plan_id').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));const swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));const access=new Set((accessResult.data||[]).map(item=>item.plan_id));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};const swipeInterest=swipes.get(plan.id);const requiresVerification=!!plan.requires_college_verification;const verificationShared=!requiresVerification||access.has(plan.id);return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',imageUrl:plan.image_url||null,coverStyle:plan.cover_style||'aurora',category:plan.category||'Community event',title:plan.title,tagline:plan.tagline||'',location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:requiresVerification,hasCollegeDetails:collegeVerificationReady,verificationShared,verificationComplete:!requiresVerification||(collegeVerificationReady&&verificationShared),isOwner:currentUser?.id===plan.user_id,swipeInterest,interested:swipeInterest===true,saved:savedEventIds.has(plan.id)||swipeInterest===true}})}renderPosts();applyAdminContent();applyAdminStyles();if(!pageView.hidden&&document.querySelector('[data-page].active')?.dataset.page==='profile'&&!isPublicProfileOpen())renderProfile();renderPulseBar()}
+async function loadPlans(){if(!supabase)return;if(currentUser)await refreshCollegeVerification();const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,tagline,image_url,cover_style,category,user_id,created_at,capacity,neighborhood,requires_college_verification').order('created_at',{ascending:false});if(error){showToast('Could not load plans: '+error.message);return}if(data?.length){const ids=data.map(plan=>plan.id);const authorIds=[...new Set(data.map(plan=>plan.user_id).filter(Boolean))];const [summaryResult,authorResult,membershipResult,swipeResult,accessResult]=await Promise.all([supabase.rpc('get_plan_summaries',{p_plan_ids:ids}),authorIds.length?supabase.rpc('get_public_profiles',{p_user_ids:authorIds}):Promise.resolve({data:[]}),currentUser?supabase.from('plan_members').select('plan_id,status').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_swipes').select('plan_id,interested').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]}),currentUser?supabase.from('plan_verification_access').select('plan_id').eq('user_id',currentUser.id).in('plan_id',ids):Promise.resolve({data:[]})]);const summaries=new Map((summaryResult.data||[]).map(item=>[item.plan_id,item]));const authors=new Map((authorResult.data||[]).map(item=>[item.id,item]));const memberships=new Map((membershipResult.data||[]).map(item=>[item.plan_id,item.status]));const swipes=new Map((swipeResult.data||[]).map(item=>[item.plan_id,item.interested]));const access=new Set((accessResult.data||[]).map(item=>item.plan_id));posts=data.map(plan=>{const author=authors.get(plan.user_id)||{};const status=memberships.get(plan.id)||null;const summary=summaries.get(plan.id)||{};const swipeInterest=swipes.get(plan.id);const requiresVerification=!!plan.requires_college_verification;const verificationShared=!requiresVerification||access.has(plan.id);return{id:plan.id,user:author.username||author.full_name||'Evenit member',name:author.full_name||author.username||'Evenit member',avatar:author.avatar_url||'https://i.pravatar.cc/100?img=68',user_id:plan.user_id,time:formatPostTime(plan.created_at),created_at:plan.created_at,starts_at:plan.starts_at,image:'pic-one',imageUrl:plan.image_url||null,coverStyle:plan.cover_style||'aurora',category:plan.category||'Community event',title:plan.title,tagline:plan.tagline||'',location:plan.location,caption:plan.caption||'A new event is taking shape. Come as you are and make it yours. ✦',likes:0,comments:Number(summary.comment_count||0),joined:status==='confirmed',membershipStatus:status,joinedCount:Number(summary.confirmed_count||0),capacity:plan.capacity,requiresCollegeVerification:requiresVerification,hasCollegeDetails:collegeVerificationReady,verificationShared,verificationComplete:!requiresVerification||(collegeVerificationReady&&verificationShared),isOwner:currentUser?.id===plan.user_id,swipeInterest,interested:swipeInterest===true,saved:savedEventIds.has(plan.id)||swipeInterest===true}})}else{posts=[]}renderPosts();applyAdminContent();applyAdminStyles();refreshVisibleOwnPlans();renderPulseBar()}
 
+function refreshVisibleOwnPlans(){
+  const profile=pageView?.querySelector('.profile-instagram');
+  if(!profile||pageView.hidden||activeWorkspace)return;
+  const count=profile.querySelector('.profile-stats strong');
+  if(count)count.textContent=String(posts.filter(post=>post.user_id===currentUser?.id).length);
+  const tab=profile.querySelector('[data-profile-tab="plans"].active');
+  if(tab)renderProfileTab(tab);
+}
 function renderPulseBar(){
   const bar=document.querySelector('#pulse-bar');
   if(!bar) return;
@@ -371,7 +389,7 @@ function renderAftermathCards(items){
       if(m.file_type==='pdf') return '<a class="aftermath-media-item pdf" href="'+escapeHtml(m.file_url)+'" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">'+escapeHtml(m.file_name||'PDF')+'</span></a>';
       return '';
     }).join('');
-    const gridClass=(post.media||[]).length>=2?'grid-2':(post.media||[]).length>=3?'grid-3':'';
+    const gridClass=(post.media||[]).length>=3?'grid-3':(post.media||[]).length>=2?'grid-2':'';
     return '<article class="aftermath-card" data-aftermath-id="'+escapeHtml(post.id)+'">'
       +'<button class="aftermath-author-line" type="button" data-public-profile-id="'+escapeHtml(post.author_id)+'">'+escapeHtml(authorLabel)+'</button>'
       +'<button class="aftermath-event-context" type="button" data-aftermath-event="'+escapeHtml(post.plan_id||'')+'" data-event-title="'+escapeHtml(post.plan_title||'')+'" data-event-location="'+escapeHtml(post.plan_location||'')+'"><span class="aftermath-event-badge">Lived</span>'
@@ -386,9 +404,9 @@ function renderAftermathCards(items){
       +(post.comment_count?'<span>'+post.comment_count+' '+(post.comment_count===1?'comment':'comments')+'</span>':'')
       +'</div>'
       +'<div class="aftermath-actions">'
-      +'<button class="aftermath-action '+(post.liked?'liked':'')+'" data-aftermath-like="'+escapeHtml(post.id)+'"><span class="action-icon">'+(post.liked?'\u2665':'\u2661')+'</span><span class="action-label">'+(post.liked?'Liked':'Like')+'</span></button>'
-      +'<button class="aftermath-action" data-aftermath-comment="'+escapeHtml(post.id)+'"><span class="action-icon">\uD83D\uDCAC</span><span class="action-label">Comment</span></button>'
-      +'<button class="aftermath-action save" data-aftermath-save="'+escapeHtml(post.id)+'"><span class="action-icon">\u25C7</span></button>'
+      +'<button class="aftermath-action '+(post.liked?'liked':'')+'" data-aftermath-like="'+escapeHtml(post.id)+'" aria-pressed="'+Boolean(post.liked)+'"><span class="action-icon">'+icon('heart',{filled:post.liked})+'</span><span class="action-label">'+(post.liked?'Liked':'Like')+'</span></button>'
+      +'<button class="aftermath-action" data-aftermath-comment="'+escapeHtml(post.id)+'"><span class="action-icon">'+icon('comment')+'</span><span class="action-label">Comment</span></button>'
+      +'<button class="aftermath-action save" data-aftermath-save="'+escapeHtml(post.id)+'" aria-label="Save aftermath" aria-pressed="false"><span class="action-icon">'+icon('bookmark')+'</span></button>'
       +'</div></article>';
   }).join('');
 }
@@ -414,9 +432,27 @@ function wireAftermathActions(){
   document.querySelectorAll('[data-aftermath-like]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.aftermathLike;const liked=b.classList.contains('liked');
     if(!supabase||!currentUser){showToast('Log in to like');return;}
-    if(liked)await supabase.from('plan_aftermath_likes').delete().eq('post_id',id).eq('user_id',currentUser.id);
-    else await supabase.from('plan_aftermath_likes').insert({post_id:id,user_id:currentUser.id});
-    loadAftermathFeed();
+    if(b.disabled)return;
+    b.disabled=true;
+    try{
+      const {error}=await (liked?supabase.from('plan_aftermath_likes').delete().eq('post_id',id).eq('user_id',currentUser.id):supabase.from('plan_aftermath_likes').insert({post_id:id,user_id:currentUser.id}));
+      if(error)throw error;
+      const {count,error:countError}=await supabase.from('plan_aftermath_likes').select('*',{count:'exact',head:true}).eq('post_id',id);
+      document.querySelectorAll('[data-aftermath-like]').forEach(button=>{
+        if(button.dataset.aftermathLike!==id)return;
+        button.classList.toggle('liked',!liked);
+        button.setAttribute('aria-pressed',String(!liked));
+        button.querySelector('.action-icon').innerHTML=icon('heart',{filled:!liked});
+        button.querySelector('.action-label').textContent=liked?'Like':'Liked';
+        const stats=button.closest('.aftermath-card')?.querySelector('.aftermath-stats');
+        if(stats&&!countError){
+          let counter=[...stats.querySelectorAll('span')].find(item=>/likes?$/.test(item.textContent));
+          if(!counter){counter=document.createElement('span');stats.prepend(counter);}
+          counter.textContent=count?count+' '+(count===1?'like':'likes'):'';
+        }
+      });
+    }catch(error){showToast(error.message||'Could not update like. Please try again.');}
+    finally{b.disabled=false;}
   });
   document.querySelectorAll('[data-aftermath-comment]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.aftermathComment;activeAftermathCommentId=id;
@@ -433,6 +469,9 @@ function wireAftermathActions(){
   });
   document.querySelectorAll('[data-aftermath-save]').forEach(b=>b.onclick=()=>{
     b.classList.toggle('saved');try{navigator.vibrate?.(12);}catch{}
+    b.querySelector('.action-icon').innerHTML=icon('bookmark',{filled:b.classList.contains('saved')});
+    b.setAttribute('aria-pressed',String(b.classList.contains('saved')));
+    b.setAttribute('aria-label',b.classList.contains('saved')?'Unsave aftermath':'Save aftermath');
     showToast(b.classList.contains('saved')?'Saved \u2713':'Unsaved');
   });
 }
@@ -489,7 +528,7 @@ async function openComments(planId){
       (profs||[]).forEach(p=>profiles.set(p.id,p));
     }
     if(!data||!data.length){
-      list.innerHTML='<div style="padding:32px 20px;text-align:center;color:#6E6E73"><div style="font-size:28px;margin-bottom:8px">💬</div><div style="font-weight:600;color:#1D1D1F">No comments yet</div><div style="font-size:12px;margin-top:4px">Be the first to say something warm.</div></div>';
+      list.innerHTML='<div style="padding:32px 20px;text-align:center;color:#6E6E73"><div style="font-size:28px;margin-bottom:8px">'+icon('comment')+'</div><div style="font-weight:600;color:#1D1D1F">No comments yet</div><div style="font-size:12px;margin-top:4px">Be the first to say something warm.</div></div>';
     } else {
       list.innerHTML=data.map(c=>{
         const p=profiles.get(c.user_id)||{};
@@ -528,14 +567,14 @@ async function submitComment(e){
   await openComments(activeCommentPlanId);
   await loadPlans();
 }
-function renderPosts(){if(document.querySelector('[data-page=home]')?.classList.contains('active'))return;postsEl.innerHTML=posts.map((post,index)=>{const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;const membership=post.entryPass?.checked_in_at?'Attended \u2713':post.membershipStatus==='confirmed'?'Confirmed \u2713':post.membershipStatus==='waitlisted'?'On waitlist':'Join in';const membershipClass=post.entryPass?.checked_in_at?' attended':post.membershipStatus==='confirmed'?' joined':post.membershipStatus==='waitlisted'?' waitlisted':'';return`<article class="post" data-plan-id="${escapeHtml(post.id||'')}"><header class="post-head"><img data-profile-id="${escapeHtml(post.user_id||'')}" src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}"><div><strong data-profile-id="${escapeHtml(post.user_id||'')}">${escapeHtml(post.user)}</strong><small>${escapeHtml(post.time)} · <a class="place" href="${mapUrl(post.location)}" target="_blank" rel="noreferrer">${escapeHtml(post.location)} ↗</a></small></div><button class="more" data-index="${index}">•••</button></header><div class="post-visual ${escapeHtml(post.image)}" data-plan-id="${escapeHtml(post.id||'')}" ><div class="visual-label"><small class="visual-category">${escapeHtml(post.category||'COMMUNITY EVENT')}</small><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location)}</p></div></div><div class="post-actions"><button class="action like ${post.liked?'liked':''}" data-index="${index}">${post.liked?'👍':'👍🏻'}</button><button class="action comment" data-index="${index}">◯</button><button class="action share" data-index="${index}">⌁</button><button class="action save ${post.saved?'saved':''}" data-index="${index}">${post.saved?'◆':'◇'}</button></div><div class="post-body"><p class="likes">${post.likes+(post.liked?1:0)} people are interested</p><p class="caption"><strong>${escapeHtml(post.user)}</strong> ${escapeHtml(post.caption)} <a href="#">#${escapeHtml(post.title.replaceAll(' ',''))}</a></p><p class="comments">View all ${post.comments||0} comments</p><p class="plan-attendance">${attendance}${post.capacity&&post.joinedCount>=post.capacity?' · Full':''}</p><button class="join-plan${membershipClass}" data-index="${index}">${membership} <span>→</span></button>${post.isOwner?`<button class="insights-button" data-insights-id="${escapeHtml(post.id)}">View insights <span>↗</span></button>`:''}</div></article>`}).join('');document.querySelectorAll('.like').forEach(btn=>btn.onclick=()=>{
+function renderPosts(){if(document.querySelector('[data-page=home]')?.classList.contains('active'))return;postsEl.innerHTML=posts.map((post,index)=>{const attendance=post.capacity?`${post.joinedCount||0} / ${post.capacity} confirmed`:`${post.joinedCount||0} joined`;const membership=post.entryPass?.checked_in_at?'Attended \u2713':post.membershipStatus==='confirmed'?'Confirmed \u2713':post.membershipStatus==='waitlisted'?'On waitlist':'Join in';const membershipClass=post.entryPass?.checked_in_at?' attended':post.membershipStatus==='confirmed'?' joined':post.membershipStatus==='waitlisted'?' waitlisted':'';return`<article class="post" data-plan-id="${escapeHtml(post.id||'')}"><header class="post-head"><img data-profile-id="${escapeHtml(post.user_id||'')}" src="${escapeHtml(post.avatar)}" alt="${escapeHtml(post.name)}"><div><strong data-profile-id="${escapeHtml(post.user_id||'')}">${escapeHtml(post.user)}</strong><small>${escapeHtml(post.time)} · <a class="place" href="${mapUrl(post.location)}" target="_blank" rel="noreferrer">${escapeHtml(post.location)} ↗</a></small></div><button class="more" data-index="${index}" aria-label="More event options">${icon('more')}</button></header><div class="post-visual ${escapeHtml(post.image)}" data-plan-id="${escapeHtml(post.id||'')}" ><div class="visual-label"><small class="visual-category">${escapeHtml(post.category||'COMMUNITY EVENT')}</small><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.location)}</p></div></div><div class="post-actions"><button class="action like ${post.liked?'liked':''}" data-index="${index}" aria-label="Like event" aria-pressed="${Boolean(post.liked)}">${icon('heart',{filled:post.liked})}</button><button class="action comment" data-index="${index}" aria-label="Comment on event">${icon('comment')}</button><button class="action share" data-index="${index}" aria-label="Share event">${icon('share')}</button><button class="action save ${post.saved?'saved':''}" data-index="${index}" aria-label="${post.saved?'Unsave event':'Save event'}" aria-pressed="${Boolean(post.saved)}">${icon('bookmark',{filled:post.saved})}</button></div><div class="post-body"><p class="likes">${post.likes+(post.liked?1:0)} people are interested</p><p class="caption"><strong>${escapeHtml(post.user)}</strong> ${escapeHtml(post.caption)} <a href="#">#${escapeHtml(post.title.replaceAll(' ',''))}</a></p><p class="comments">View all ${post.comments||0} comments</p><p class="plan-attendance">${attendance}${post.capacity&&post.joinedCount>=post.capacity?' · Full':''}</p><button class="join-plan${membershipClass}" data-index="${index}">${membership} <span>→</span></button>${post.isOwner?`<button class="insights-button" data-insights-id="${escapeHtml(post.id)}">View insights <span>↗</span></button>`:''}</div></article>`}).join('');postsEl.querySelectorAll('.post-actions .like[data-index]').forEach(btn=>btn.onclick=()=>{
   const p=posts[btn.dataset.index]; p.liked=!p.liked;
   try{ navigator.vibrate?.(p.liked?20:10); }catch{}
   btn.animate?.([{transform:'scale(1)'},{transform:'scale(1.25)'},{transform:'scale(1)'}],{duration:220, easing:'cubic-bezier(.2,.8,.2,1)'});
   renderPosts();
   showToast(p.liked?'Liked — thanks for the love':'Like removed');
 });
-document.querySelectorAll('.save').forEach(btn=>{
+postsEl.querySelectorAll('.post-actions .save[data-index]').forEach(btn=>{
   btn.onclick=()=>{
     const post=posts[btn.dataset.index];post.saved=!post.saved;
     post.saved?savedEventIds.add(post.id||post.title):savedEventIds.delete(post.id||post.title);
@@ -545,10 +584,10 @@ document.querySelectorAll('.save').forEach(btn=>{
     showToast(post.saved?'Saved ✓ — find it in Profile → Saved':'Removed from saved');
     renderPosts();
   };
-});document.querySelectorAll('.share').forEach(btn=>btn.onclick=async()=>{
+});postsEl.querySelectorAll('.post-actions .share[data-index]').forEach(btn=>btn.onclick=async()=>{
   const post=posts[btn.dataset.index];
   openEvenitShare({type:'event',id:post?.id,title:post?.title,text:`Have a look at ${post?.title||'this plan'} on Evenit.`});
-});document.querySelectorAll('.comment').forEach(btn=>btn.onclick=()=>addPlanComment(btn.dataset.index));document.querySelectorAll('.join-plan').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));document.querySelectorAll('.more').forEach(btn=>btn.onclick=()=>showToast('More event actions are coming next ✦'));document.querySelectorAll('.post-visual[data-plan-id]').forEach(visual=>visual.onclick=()=>recordPlanInteraction(visual.dataset.planId,'click'));trackPostImpressions()}
+});postsEl.querySelectorAll('.post-actions .comment[data-index]').forEach(btn=>btn.onclick=()=>addPlanComment(btn.dataset.index));postsEl.querySelectorAll('.join-plan[data-index]').forEach(btn=>btn.onclick=()=>toggleJoin(btn.dataset.index));postsEl.querySelectorAll('.more[data-index]').forEach(btn=>btn.onclick=()=>showToast('More event actions are coming next ✦'));postsEl.querySelectorAll('.post-visual[data-plan-id]').forEach(visual=>visual.onclick=()=>recordPlanInteraction(visual.dataset.planId,'click'));trackPostImpressions()}
 
 let activeEvenitShare=null;
 function evenitShareUrl(type,id){
@@ -595,10 +634,10 @@ function loadPlansPreservingHostWorkspace(){
   return Promise.resolve(loadPlans()).finally(()=>{renderProfile=profileRenderer;});
 }
 const pageTemplates={
-  discover:`<div class="page-header"><p class="overline">Find your people</p><h2>Discover plans<br><em>worth joining.</em></h2><div class="search-box">⌕ <input placeholder="Search plans, places, or people..."></div></div><div class="discover-grid"><div class="discover-tile tile-violet"><small>OUTDOORS</small><strong>Golden hour<br>on the water</strong><span>16 people going →</span></div><div class="discover-tile tile-gold"><small>FOOD & DRINK</small><strong>Sunday supper<br>club</strong><span>12 people going →</span></div><div class="discover-tile tile-ink"><small>CREATIVE</small><strong>Make a tiny<br>zine together</strong><span>8 people going →</span></div></div>`,
+  discover:`<div class="page-header"><p class="overline">Find your people</p><h2>Discover plans<br><em>worth joining.</em></h2><div class="search-box">${icon('search')} <input placeholder="Search plans, places, or people..."></div></div><div class="discover-grid"><div class="discover-tile tile-violet"><small>OUTDOORS</small><strong>Golden hour<br>on the water</strong><span>16 people going →</span></div><div class="discover-tile tile-gold"><small>FOOD & DRINK</small><strong>Sunday supper<br>club</strong><span>12 people going →</span></div><div class="discover-tile tile-ink"><small>CREATIVE</small><strong>Make a tiny<br>zine together</strong><span>8 people going →</span></div></div>`,
   notifications:`<div class="page-header"><p class="overline">Stay in the loop</p><h2>Notifications</h2></div><div class="activity-list"><div class="activity"><img src="https://i.pravatar.cc/100?img=47"><p><strong>ari.makes</strong> joined your plan <b>Sunset picnic</b><small>12 minutes ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=25"><p><strong>maya.rose</strong> liked your plan <b>Saturday sketch walk</b><small>1 hour ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=44"><p><strong>theo.walks</strong> started following you<small>Yesterday</small></p></div></div>`,
   messages:`<div class="page-header message-header"><div><p class="overline">Keep the plan moving</p><h2>Messages</h2><p>Conversations and private circles, in one calm place.</p></div><button class="message-compose" type="button" title="New message" aria-label="Start a new conversation">✎ <span>New</span></button></div><div class="message-availability"><span class="online-dot"></span><strong>Your circles are up to date</strong><small>Replies, group notes, and event chats live here.</small></div><div class="msg-toggle" role="tablist"><button class="msg-tab active" data-msg-tab="primary">Primary <small>2</small></button><button class="msg-tab" data-msg-tab="groups">Groups</button></div><div id="msg-primary-pane" class="msg-pane"><div class="message-list"><button class="message"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose <span class="message-presence"></span></strong><p>Should we bring extra blankets for the picnic?</p></div><small>2m</small></button><button class="message"><img src="https://i.pravatar.cc/100?img=47" alt=""><div><strong>ari.makes</strong><p>That coffee walk sounds perfect.</p></div><small>1h</small></button></div><div class="message-note"><span>✦</span><div><strong>Keep good plans close</strong><p>Join a plan to start a new conversation.</p></div></div></div><div id="msg-groups-pane" class="msg-pane" hidden><div class="groups-heading"><div><h3>Groups</h3><p>Private circles for members only.</p></div><button class="publish-button" id="open-group-create">＋ Create</button></div><div id="groups-list" class="groups-list"></div></div>`,
-  settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2><p class="settings-intro">Control the parts of Evenit that matter to you.</p></div><div class="settings-list"><button data-settings-panel="account"><span class="settings-icon">◎</span><span><strong>Account details</strong><small>Name, username, profile and email</small></span><b>›</b></button><button data-settings-panel="notifications"><span class="settings-icon">♡</span><span><strong>Notification preferences</strong><small>Choose what reaches you</small></span><b>›</b></button><button data-settings-panel="privacy"><span class="settings-icon">◌</span><span><strong>Privacy and safety</strong><small>Profile visibility and location</small></span><b>›</b></button><a class="settings-download" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span class="settings-icon">↓</span><span><strong>Download Android app</strong><small>Install the latest Evenit APK</small></span><b>›</b></a><button data-settings-panel="help"><span class="settings-icon">?</span><span><strong>Help center</strong><small>Answers and support</small></span><b>›</b></button></div>`,
+  settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2><p class="settings-intro">Control the parts of Evenit that matter to you.</p></div><div class="settings-list"><button data-settings-panel="account"><span class="settings-icon">${icon('profile')}</span><span><strong>Account details</strong><small>Name, username, profile and email</small></span><b>›</b></button><button data-settings-panel="notifications"><span class="settings-icon">${icon('heart')}</span><span><strong>Notification preferences</strong><small>Choose what reaches you</small></span><b>›</b></button><button data-settings-panel="privacy"><span class="settings-icon">${icon('lock')}</span><span><strong>Privacy and safety</strong><small>Profile visibility and location</small></span><b>›</b></button><a class="settings-download" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span class="settings-icon">${icon('download')}</span><span><strong>Download Android app</strong><small>Install the latest Evenit APK</small></span><b>›</b></a><button data-settings-panel="help"><span class="settings-icon">${icon('help')}</span><span><strong>Help center</strong><small>Answers and support</small></span><b>›</b></button></div>`,
 };
   function renderProfile(){
     const loggedIn=Boolean(currentUser);
@@ -606,7 +645,7 @@ const pageTemplates={
     const username=currentUser?.user_metadata?.username||'your.profile';
     const createdEvents=loggedIn?posts.filter(post=>post.user_id===currentUser.id).length:0;
     const title=loggedIn?`@${escapeHtml(username)}`:'Log in';
-    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${title}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open profile menu" aria-expanded="false"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">${loggedIn?'Your profile':'Welcome to Evenit'}</p><h2>${escapeHtml(loggedIn?name:'Your next plan starts here')}</h2></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" ${loggedIn?'':'hidden'}><div class="profile-about-heading"><h3>About</h3><button class="profile-about-add" id="profile-about-add" type="button">Add details</button></div><p class="profile-about-own" hidden></p><p class="profile-about-empty">A few words about you helps people know what plans you love.</p></section>${loggedIn?'<section class="profile-completion-card" id="profile-completion" hidden><div><strong>Complete your profile</strong><p>Add a short About to make your profile feel like yours.</p></div><button id="complete-profile" type="button">Complete</button></section><div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Log in to your profile'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Log in to follow people, request a place, and keep your plans together.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions guest-profile-actions"><button class="publish-button" id="profile-login">Log in</button><button class="profile-login-button" id="profile-signup">Create a profile</button></div>'}</div></div></section>`;
+    pageView.innerHTML=`<section class="profile-instagram"><header class="profile-appbar"><button type="button" class="topbar-plus" aria-label="Create a plan">${icon('plus')}</button><strong>${title}</strong><button id="profile-menu" class="profile-menu profile-menu-lines" type="button" aria-label="Open profile menu" aria-expanded="false"><i></i><i></i><i></i></button></header><div class="profile-intro"><img src="${currentUser?.user_metadata?.avatar_url||'https://i.pravatar.cc/160?img=68'}" alt="${escapeHtml(name)}"><div class="profile-identity"><p class="overline">${loggedIn?'Your profile':'Welcome to Evenit'}</p><h2>${escapeHtml(loggedIn?name:'Your next plan starts here')}</h2></div></div><div class="profile-stats" aria-label="Profile stats"><span><strong>${createdEvents}</strong>Events created</span><span><strong id="profile-followers-count">0</strong>Followers</span><span><strong id="profile-following-count">0</strong>Following</span></div><section class="profile-about-section" ${loggedIn?'':'hidden'}><div class="profile-about-heading"><h3>About</h3><button class="profile-about-add" id="profile-about-add" type="button">Add details</button></div><p class="profile-about-own" hidden></p><p class="profile-about-empty">A few words about you helps people know what plans you love.</p></section>${loggedIn?'<section class="profile-completion-card" id="profile-completion" hidden><div><strong>Complete your profile</strong><p>Add a short About to make your profile feel like yours.</p></div><button id="complete-profile" type="button">Complete</button></section><div class="profile-actions-row"><button class="edit-profile" type="button">Edit profile</button><button class="share-profile" id="share-profile" type="button">Share profile</button></div>':''}<div class="profile-tabs" role="tablist" aria-label="Profile activity"><button class="active" type="button" role="tab" aria-selected="true" data-profile-tab="plans">My Plans</button><button type="button" role="tab" aria-selected="false" data-profile-tab="lived">Lived On</button></div><div class="profile-tab-stage"><div class="profile-empty"><span>✦</span><h3>${loggedIn?'Your plans will appear here':'Log in to your profile'}</h3><p>${loggedIn?'Share an idea and give people a reason to show up.':'Log in to follow people, request a place, and keep your plans together.'}</p>${loggedIn?'<button class="publish-button" id="profile-post">Create plan <span>→</span></button>':'<div class="profile-actions guest-profile-actions"><button class="publish-button" id="profile-login">Log in</button><button class="profile-login-button" id="profile-signup">Create a profile</button></div>'}</div></div></section>`;
     if(loggedIn){
       document.querySelector('#profile-post').onclick=()=>modal.classList.add('open');
       document.querySelector('#profile-about-add')?.addEventListener('click',()=>document.querySelector('.edit-profile')?.click());
@@ -621,7 +660,7 @@ const pageTemplates={
     applyAdminContent();applyAdminStyles();
   }
   function renderDiscover(){
-  pageView.innerHTML=`<div class="page-header discover-header"><div><p class="overline">Made for you</p><h2>Discover<br><em>events.</em></h2><p>Interest matches first, then a little room for something unexpected.</p></div><button class="discover-swipe-launch" id="open-swipe-discover" type="button"><span>✦</span> Swipe events</button></div><div class="discover-welcome"><span class="discover-welcome-icon">⌕</span><div><strong>All upcoming events, ranked for you.</strong><small>Swipe separately to tune what Evenit recommends next.</small></div></div><div id="following-events" class="following-feed"></div><div class="discover-swipe-overlay" id="discover-swipe-overlay" hidden><section id="discover-swipe-section" class="discover-swipe-section" role="dialog" aria-modal="true" aria-label="Swipe events"><div class="discover-swipe-heading"><div><p class="overline">Something new</p><h3>Swipe to choose.</h3><small>Right means interested. Left means show me less like this.</small></div><button type="button" id="close-swipe-discover" aria-label="Close swipe events">×</button></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div></section></div>`;
+  pageView.innerHTML=`<div class="page-header discover-header"><div><p class="overline">Made for you</p><h2>Discover<br><em>events.</em></h2><p>Interest matches first, then a little room for something unexpected.</p></div><button class="discover-swipe-launch" id="open-swipe-discover" type="button"><span>✦</span> Swipe events</button></div><div class="discover-welcome"><span class="discover-welcome-icon">${icon('search')}</span><div><strong>All upcoming events, ranked for you.</strong><small>Swipe separately to tune what Evenit recommends next.</small></div></div><div id="following-events" class="following-feed"></div><div class="discover-swipe-overlay" id="discover-swipe-overlay" hidden><section id="discover-swipe-section" class="discover-swipe-section" role="dialog" aria-modal="true" aria-label="Swipe events"><div class="discover-swipe-heading"><div><p class="overline">Something new</p><h3>Swipe to choose.</h3><small>Right means interested. Left means show me less like this.</small></div><button type="button" id="close-swipe-discover" aria-label="Close swipe events">×</button></div><div id="swipe-deck" class="swipe-deck-wrap"></div><div id="swipe-actions-row" class="swipe-actions"></div><div id="swipe-progress-row" class="swipe-progress"></div></section></div>`;
   loadFollowingEvents();
   const swipeOverlay=document.querySelector('#discover-swipe-overlay');
   const closeSwipe=()=>{swipeOverlay.classList.remove('open');setTimeout(()=>swipeOverlay.hidden=true,180);};
@@ -638,7 +677,7 @@ renderDiscover=function(){
   evenitRenderDiscover();
   const header=document.querySelector('.discover-header');
   if(header){
-    header.insertAdjacentHTML('afterbegin','<div class="page-topbar discover-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><label class="topbar-search">⌕<input id="discover-search" placeholder="Search people, plans, places"></label><button class="topbar-icon" id="discover-filter" type="button" aria-label="Filter plans">☷</button></div>');
+    header.insertAdjacentHTML('afterbegin','<div class="page-topbar discover-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><label class="topbar-search">'+icon('search')+'<input id="discover-search" aria-label="Search people, plans, places" placeholder="Search people, plans, places"></label><button class="topbar-icon" id="discover-filter" type="button" aria-label="Filter plans">'+icon('filter')+'</button></div>');
     header.querySelector('.overline')?.remove();
   }
   const feed=document.querySelector('#following-events');
@@ -657,7 +696,7 @@ renderProfile=function(){
   const intro=document.querySelector('.profile-intro');
   const cover=document.querySelector('.profile-cover');
   const handle=document.querySelector('.profile-handle')?.textContent||'@profile';
-  if(cover&&!document.querySelector('.profile-sketch-topbar'))cover.insertAdjacentHTML('beforebegin',`<div class="profile-sketch-topbar"><button type="button" class="topbar-plus" aria-label="Create a plan">＋</button><strong>${escapeHtml(handle)}</strong><button id="profile-menu" class="profile-menu" type="button" aria-label="Open profile options"><i></i><i></i><i></i></button></div>`);
+  if(cover&&!document.querySelector('.profile-sketch-topbar'))cover.insertAdjacentHTML('beforebegin',`<div class="profile-sketch-topbar"><button type="button" class="topbar-plus" aria-label="Create a plan">${icon('plus')}</button><strong>${escapeHtml(handle)}</strong><button id="profile-menu" class="profile-menu" type="button" aria-label="Open profile options"><i></i><i></i><i></i></button></div>`);
   document.querySelector('.topbar-plus')?.addEventListener('click',()=>modal.classList.add('open'));
 };
 let swipeStack=[];
@@ -915,7 +954,7 @@ setPage=function(page){
   }
   if(page==='messages'||page==='groups'){
     const header=document.querySelector('.message-header');
-    if(header&&!document.querySelector('.messages-topbar'))header.insertAdjacentHTML('beforebegin','<div class="page-topbar messages-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><div class="message-filter"><button class="filter-chip active" data-message-filter="all">All</button><button class="filter-chip" data-message-filter="unread">Unread</button></div><button class="topbar-icon" type="button" aria-label="Filter messages">☷</button></div>');
+    if(header&&!document.querySelector('.messages-topbar'))header.insertAdjacentHTML('beforebegin','<div class="page-topbar messages-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><div class="message-filter"><button class="filter-chip active" data-message-filter="all">All</button><button class="filter-chip" data-message-filter="unread">Unread</button></div><button class="topbar-icon" type="button" aria-label="Filter messages">'+icon('filter')+'</button></div>');
     if(page==='groups')document.querySelector('.msg-tab[data-msg-tab="groups"]')?.click();
     document.querySelector('#open-group-create')?.addEventListener('click',()=>currentUser?document.querySelector('#group-modal')?.classList.add('open'):loginModal?.classList.add('open'));
   }
@@ -969,11 +1008,11 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-page="profile"]
 document.querySelector('#use-location').onclick=()=>{const status=document.querySelector('#location-status');if(!navigator.geolocation){status.textContent='Location is not available in this browser.';return}status.textContent='Requesting your approximate location...';navigator.geolocation.getCurrentPosition(async position=>{currentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};const {error}=await supabase.from('profiles').update(currentLocation).eq('id',currentUser.id);status.textContent=error?'Could not save location.': 'Approximate location saved for nearby event distance.';if(error)showToast(error.message)},()=>{status.textContent='Location permission was not granted.'},{enableHighAccuracy:false,maximumAge:300000,timeout:10000})};
 const photoViewer=document.querySelector('#photo-viewer');document.addEventListener('click',e=>{const photo=e.target.closest('.profile-intro img');if(!photo)return;document.querySelector('#expanded-photo').src=photo.src;photoViewer.classList.add('open')});document.querySelector('#close-photo').onclick=()=>photoViewer.classList.remove('open');photoViewer.onclick=e=>{if(e.target===photoViewer)photoViewer.classList.remove('open')};
 document.title='Evenit | Make plans happen';
- function applyExperienceControls(settings){const experience=settings?.experience||{};const name=experience.brand_name||settings?.site_name||'Evenit';const logoUrl=experience.logo_url?.trim();document.querySelectorAll('.logo').forEach(logo=>{logo.replaceChildren();if(logoUrl){const image=document.createElement('img');image.className='brand-logo-image';image.src=logoUrl;image.alt='';image.onerror=()=>image.remove();logo.append(image)}const label=document.createElement('span');label.textContent=name;logo.append(label)});const favicon=document.querySelector('#site-favicon');if(favicon&&experience.app_icon_url?.trim())favicon.href=experience.app_icon_url.trim();const root=document.documentElement;root.style.setProperty('--admin-surface-opacity',`${Math.min(100,Math.max(65,Number(experience.surface_opacity??92)))/100}`);root.style.setProperty('--admin-radius',`${Math.min(34,Math.max(10,Number(experience.corner_radius??22)))}px`);root.style.setProperty('--admin-shadow-opacity',`${Math.min(45,Math.max(0,Number(experience.shadow_strength??8)))/100}`);root.dataset.contentDensity=experience.content_density||'balanced';const kicker=document.querySelector('.feed-kicker');if(kicker&&experience.header_tagline)kicker.textContent=experience.header_tagline;const footer=document.querySelector('#site-footer');if(footer){footer.hidden=experience.show_footer===false;if(experience.footer_text)footer.textContent=experience.footer_text}const dock={home:['home','dock_home'],discover:['discover','dock_discover'],messages:['messages','dock_messages'],profile:['profile','dock_profile']};Object.entries(dock).forEach(([page,[key,labelKey]])=>{const item=document.querySelector(`.mobile-dock [data-page="${page}"]`);if(!item)return;const label=experience[labelKey];if(label){item.querySelector('small').textContent=label;item.setAttribute('aria-label',label)}const icon=experience[`icon_${page}`];if(icon)item.querySelector('span').textContent=icon});const create=document.querySelector('[data-dock-create]');if(create&&experience.dock_create){create.querySelector('small').textContent=experience.dock_create;create.setAttribute('aria-label',experience.dock_create)}const homeHeart=document.querySelector('.home-notification-link');if(homeHeart)homeHeart.hidden=experience.show_home_heart===false;const sync=document.querySelector('#connection-refresh');if(sync)sync.hidden=experience.show_sync_control===false;const stories=document.querySelector('#pulse-bar');if(stories)stories.hidden=experience.show_stories===false||document.querySelector('[data-page].active')?.dataset.page!=='home';const nearby=document.querySelector('.right-rail');if(nearby)nearby.hidden=experience.show_right_rail===false;}
+ function applyExperienceControls(settings){const experience=settings?.experience||{};const name=experience.brand_name||settings?.site_name||'Evenit';const wordmark=String(name).toLowerCase();const logoUrl=experience.logo_url?.trim();document.querySelectorAll('.logo').forEach(logo=>{logo.replaceChildren();if(logoUrl){const image=document.createElement('img');image.className='brand-logo-image';image.src=logoUrl;image.alt='';image.onerror=()=>image.remove();logo.append(image)}const label=document.createElement('span');label.textContent=wordmark;logo.append(label)});const homeWordmark=document.querySelector('.home-brand h1');if(homeWordmark)homeWordmark.textContent=wordmark;const favicon=document.querySelector('#site-favicon');if(favicon&&experience.app_icon_url?.trim())favicon.href=experience.app_icon_url.trim();const root=document.documentElement;root.style.setProperty('--admin-surface-opacity',`${Math.min(100,Math.max(65,Number(experience.surface_opacity??92)))/100}`);root.style.setProperty('--admin-radius',`${Math.min(34,Math.max(10,Number(experience.corner_radius??22)))}px`);root.style.setProperty('--admin-shadow-opacity',`${Math.min(45,Math.max(0,Number(experience.shadow_strength??8)))/100}`);root.dataset.contentDensity=experience.content_density||'balanced';const kicker=document.querySelector('.feed-kicker');if(kicker&&experience.header_tagline)kicker.textContent=experience.header_tagline;const footer=document.querySelector('#site-footer');if(footer){footer.hidden=experience.show_footer===false;if(experience.footer_text)footer.textContent=experience.footer_text}const dock={home:['home','dock_home'],discover:['discover','dock_discover'],messages:['messages','dock_messages'],profile:['profile','dock_profile']};Object.entries(dock).forEach(([page,[key,labelKey]])=>{const item=document.querySelector(`.mobile-dock [data-page="${page}"]`);if(!item)return;const label=experience[labelKey];if(label){item.querySelector('small').textContent=label;item.setAttribute('aria-label',label)}const icon=experience[`icon_${page}`];if(icon)item.querySelector('span').textContent=icon});const create=document.querySelector('[data-dock-create]');if(create&&experience.dock_create){create.querySelector('small').textContent=experience.dock_create;create.setAttribute('aria-label',experience.dock_create)}const homeHeart=document.querySelector('.home-notification-link');if(homeHeart)homeHeart.hidden=experience.show_home_heart===false;const sync=document.querySelector('#connection-refresh');if(sync)sync.hidden=experience.show_sync_control===false;const stories=document.querySelector('#pulse-bar');if(stories)stories.hidden=experience.show_stories===false||document.querySelector('[data-page].active')?.dataset.page!=='home';const nearby=document.querySelector('.right-rail');if(nearby)nearby.hidden=experience.show_right_rail===false;}
  async function loadSiteSettings(){if(!supabase)return;const {data}=await supabase.from('site_settings').select('*').single();if(!data)return;document.title=`${data.site_name} | Make plans happen`;document.documentElement.style.setProperty('--violet',data.primary_color);document.documentElement.style.setProperty('--gold',data.accent_color);applyExperienceControls(data);document.querySelectorAll('.like').forEach(button=>button.textContent=data.reaction_icon);const notification=document.querySelector('[data-page="notifications"]');if(notification){const label=[...notification.childNodes].find(node=>node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('Notifications'));if(label)label.nodeValue=label.nodeValue.replace('Notifications',data.notification_label)}}
 loadSiteSettings();
  if(supabase){supabase.channel('evenit-site-settings').on('postgres_changes',{event:'UPDATE',schema:'public',table:'site_settings'},()=>{loadSiteSettings();applyAdminContent();applyAdminStyles();showToast('Live design update applied ✦')}).subscribe()}
- async function applyAdminContent(){if(!supabase)return;const {data}=await supabase.from('site_settings').select('*').single();const content=data?.content||{};adminContent=content;const setText=(selector,value)=>{if(!value)return;document.querySelectorAll(selector).forEach(element=>{const text=[...element.childNodes].find(node=>node.nodeType===Node.TEXT_NODE&&node.nodeValue.trim());if(text)text.nodeValue=` ${value}`})};const setValue=(selector,value)=>{if(value)document.querySelectorAll(selector).forEach(element=>element.value=value)};setText('.post-button span',content.post_button);setText('.feed-top h1',content.home_title);setText('.feed-filter',content.home_filter);setText('[data-page="discover"]',content.discover_tab);setText('[data-page="notifications"]',content.notification_tab);setText('[data-page="messages"]',content.messages_tab);setText('[data-page="settings"]',content.settings_tab);setText('.stories .add-story small',content.home_story_label);setText('#login-form .publish-button',content.login_button);setText('#signup-form .publish-button',content.signup_button);setText('#edit-form .publish-button',content.save_button);document.querySelectorAll('.join-plan').forEach(button=>{const label=button.classList.contains('joined')?'Confirmed ✓':button.classList.contains('waitlisted')?'On waitlist':content.join_button||'Join in';button.childNodes[0].nodeValue=`${label} `});document.querySelectorAll('.like').forEach(button=>button.textContent=data.reaction_icon||content.reaction_icon||'👍🏻');setValue('.search-box input',content.discover_search);refreshPageCopy();document.title=`${data.site_name||'Evenit'} | Make plans happen`}
+ async function applyAdminContent(){if(!supabase)return;const {data}=await supabase.from('site_settings').select('*').single();const content=data?.content||{};adminContent=content;const setText=(selector,value)=>{if(!value)return;document.querySelectorAll(selector).forEach(element=>{const text=[...element.childNodes].find(node=>node.nodeType===Node.TEXT_NODE&&node.nodeValue.trim());if(text)text.nodeValue=` ${value}`})};const setValue=(selector,value)=>{if(value)document.querySelectorAll(selector).forEach(element=>element.value=value)};setText('.post-button span',content.post_button);setText('.plan-board-strip .pulse-intro strong',content.home_title);setText('.feed-filter',content.home_filter);setText('[data-page="discover"]',content.discover_tab);setText('[data-page="notifications"]',content.notification_tab);setText('[data-page="messages"]',content.messages_tab);setText('[data-page="settings"]',content.settings_tab);setText('.stories .add-story small',content.home_story_label);setText('#login-form .publish-button',content.login_button);setText('#signup-form .publish-button',content.signup_button);setText('#edit-form .publish-button',content.save_button);document.querySelectorAll('.join-plan').forEach(button=>{const label=button.classList.contains('joined')?'Confirmed ✓':button.classList.contains('waitlisted')?'On waitlist':content.join_button||'Join in';button.childNodes[0].nodeValue=`${label} `});document.querySelectorAll('.like').forEach(button=>{const reactionIcon=data.reaction_icon||content.reaction_icon;if(reactionIcon)button.textContent=reactionIcon;else button.innerHTML=icon('heart',{filled:button.classList.contains('liked')})});setValue('.search-box input',content.discover_search);refreshPageCopy();document.title=`${data.site_name||'Evenit'} | Make plans happen`}
  applyAdminContent();
  async function applyAdminStyles(){if(!supabase)return;const {data}=await supabase.from('site_settings').select('ui_styles').single();const styles=data?.ui_styles||{};const set=(selector,key,property='color')=>{if(styles[key])document.querySelectorAll(selector).forEach(element=>element.style[property]=styles[key])};set('[data-page="home"]','nav_home');set('[data-page="discover"]','nav_discover');set('[data-page="notifications"]','nav_notifications');set('[data-page="messages"]','nav_messages');set('[data-page="profile"]','nav_profile');set('[data-page="settings"]','nav_settings');set('.post-button,.publish-button','post_button','backgroundColor');set('.join-plan','join_button','backgroundColor');set('.login-link,.profile-login-button','login_button');set('.feed-filter','feed_filter');set('.page-header h2,.feed-top h1,.profile-intro h2','page_heading');set('.post-body,.page-view,.sidebar-bottom p','body_text');set('.post,.profile-empty,.discover-result,.activity-list,.message-list,.settings-list','card_background','backgroundColor');set('.like,.notification-mark,.profile-event>span','reaction');}
  applyAdminStyles();
@@ -1032,21 +1071,22 @@ async function openDirectConversation(profile,options={}){
   try{
     await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');
   }catch(error){
-    currentUser=null;
-    updateAccountUI();
-    loginModal?.classList.add('open');
+    if(!currentUser)loginModal?.classList.add('open');
     showToast(error?.message||'Log in to message this profile.');
     return;
   }
   if(!options.restore)pushAppView({type:'direct-message',profile:{id:profile.id,username:profile.username||null,full_name:profile.full_name||null,avatar_url:profile.avatar_url||null,is_private:Boolean(profile.is_private)}});
   pushNav('messages');showInsightsShell();
+  window.evenitActiveGroupId=null;
   pageView.innerHTML='<div class="direct-message-page"><button class="back-link" id="back-from-direct-message">← Messages</button><div class="direct-message-heading"><img src="'+escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><p class="overline">Direct message</p><h2>'+escapeHtml(profile.full_name||profile.username||'Evenit member')+'</h2><p>@'+escapeHtml(profile.username||'member')+'</p></div></div><div class="direct-thread" id="direct-thread"><p>Loading conversation…</p></div><form class="direct-message-form" id="direct-message-form"><input name="body" maxlength="1000" placeholder="Write a message…" required><button class="publish-button" type="submit">Send <span>→</span></button></form></div>';
   document.querySelector('#back-from-direct-message').onclick=goBack;
   const thread=document.querySelector('#direct-thread');
-  const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';thread.scrollTop=thread.scrollHeight;};
+  const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(!thread.isConnected)return;if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}const atEnd=thread.scrollHeight-thread.scrollTop-thread.clientHeight<80;thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';if(atEnd)thread.scrollTop=thread.scrollHeight;};
   window.refreshEvenitDirectThread=loadThread;
+  const directForm=document.querySelector('#direct-message-form');
   await loadThread();
-  document.querySelector('#direct-message-form').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body=String(form.get('body')||'').trim();if(!body)return;const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error){showToast(data?.error||error.message);return;}event.target.reset();await Promise.all([loadThread(),loadMessageInbox()]);};
+  if(!directForm?.isConnected)return;
+  directForm.onsubmit=async event=>{event.preventDefault();const form=event.currentTarget;const body=String(new FormData(form).get('body')||'').trim();const button=form.querySelector('[type="submit"]');if(!body||button.disabled)return;button.disabled=true;try{const {data,error}=await supabase.rpc('send_direct_message',{p_recipient_id:profile.id,p_body:body});if(error||data?.error)throw new Error(data?.error||error.message);if(form.elements.body.value.trim()===body)form.reset();await Promise.all([loadThread(),loadMessageInbox()]);}catch(error){showToast(error.message||'Could not send. Your message is still here.');}finally{button.disabled=false;}};
 }
 async function getProfileAftermath(profileId){
   if(!supabase||!profileId)return [];
@@ -1289,8 +1329,10 @@ replaceBrand();
   const scanInput=document.querySelector('#scan-input');
   const scanSubmit=document.querySelector('#scan-submit');
   const scanStartCamera=document.querySelector('#scan-start-camera');
+  const scanPhotoAction=document.querySelector('#scan-photo-action');
+  const scanPhotoInput=document.querySelector('#scan-photo-input');
   const scanResult=document.querySelector('#scan-result');
-  const scanResultIcon=document.querySelector('#scan-result-icon');
+  const scanResultIcon=document.querySelector('#scan-result .scan-result-icon');
   const scanResultTitle=document.querySelector('#scan-result-title');
   const scanResultDetail=document.querySelector('#scan-result-detail');
   const scanNext=document.querySelector('#scan-next');
@@ -1360,11 +1402,27 @@ replaceBrand();
   }
   function cameraFailureDetail(error){
     const name=String(error?.name||'').toLowerCase();
-    const message=String(error?.message||'').toLowerCase();
+    const message=String(error?.message||error||'').toLowerCase();
+    if(name==='cameratimeouterror')return 'Camera permission did not finish. Check the browser or app camera permission, then try again.';
     if(name.includes('notallowed')||name.includes('security')||message.includes('permission'))return 'Allow camera access for Evenit in your device settings, then try again.';
     if(name.includes('notfound')||message.includes('no camera')||message.includes('no devices'))return 'No camera was found on this device. You can still verify a pass code manually.';
     if(name.includes('notreadable')||message.includes('in use'))return 'Your camera is busy in another app. Close that app, then try again.';
     return 'We could not start the camera. Check camera permission and try again.';
+  }
+  function cameraTimeoutError(){
+    const error=new Error('Camera permission or startup timed out');
+    error.name='CameraTimeoutError';
+    return error;
+  }
+  function withCameraTimeout(task,timeoutMs=12000){
+    let timer;
+    return Promise.race([
+      Promise.resolve(task),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(cameraTimeoutError()),timeoutMs);})
+    ]).finally(()=>clearTimeout(timer));
+  }
+  function preferredCamera(cameras=[]){
+    return cameras.find(camera=>/back|rear|environment|camera2\s*0/i.test(camera.label||''))||cameras[0]||null;
   }
   async function verifyScannedToken(token){
     if(scanBusy) return;
@@ -1426,14 +1484,22 @@ replaceBrand();
       const onDecoded=async decoded=>{
         await verifyScannedToken(decoded);
       };
+      let pendingStart;
       try{
-        await scanner.start({facingMode:{ideal:'environment'}},scannerConfig,onDecoded,()=>{});
+        pendingStart=scanner.start({facingMode:'environment'},scannerConfig,onDecoded,()=>{});
+        await withCameraTimeout(pendingStart);
       }catch(preferredCameraError){
+        if(preferredCameraError?.name==='CameraTimeoutError'){
+          pendingStart?.then(async()=>{
+            if(session!==scanSession||html5Scanner!==scanner){try{await scanner.stop();}catch(e){} try{scanner.clear();}catch(e){}}
+          }).catch(()=>{});
+          throw preferredCameraError;
+        }
         let cameras=[];
-        try{cameras=await window.Html5Qrcode.getCameras();}catch(e){throw preferredCameraError;}
-        const fallbackCamera=cameras.find(camera=>/back|rear|environment/i.test(camera.label||''))||cameras[0];
+        try{cameras=await withCameraTimeout(window.Html5Qrcode.getCameras(),8000);}catch(e){throw e?.name==='CameraTimeoutError'?e:preferredCameraError;}
+        const fallbackCamera=preferredCamera(cameras);
         if(!fallbackCamera)throw preferredCameraError;
-        await scanner.start(fallbackCamera.id,scannerConfig,onDecoded,()=>{});
+        await withCameraTimeout(scanner.start(fallbackCamera.id,scannerConfig,onDecoded,()=>{}));
       }
       if(session!==scanSession||(!scanModal.classList.contains('open')&&!isScanPageActive())||html5Scanner!==scanner){
         try{await scanner.stop();}catch(e){}
@@ -1459,9 +1525,37 @@ replaceBrand();
     setScanStatus('Camera idle', '');
     setScanCameraAction('Start camera');
     if(!scanner)return;
-    const stop=Promise.resolve(scanner.stop()).catch(()=>{});
+    let stop=Promise.resolve();
+    try{stop=Promise.resolve(scanner.stop()).catch(()=>{});}catch(e){}
     await Promise.race([stop,new Promise(resolve=>setTimeout(resolve,450))]);
     try{scanner.clear();}catch(e){}
+  }
+  async function scanQrPhoto(file){
+    if(!file)return;
+    await stopScanner();
+    const session=scanSession;
+    setScanStatus('Reading QR photo…','');
+    setScanResult('Reading QR photo…','','The image stays on this device while Evenit looks for a pass code.');
+    setScanCameraAction('Start camera');
+    if(!window.Html5Qrcode){
+      setScanResult('Photo scanner unavailable','invalid','Paste the pass code or QR link below instead.');
+      return;
+    }
+    const scanner=new window.Html5Qrcode('scan-reader');
+    html5Scanner=scanner;
+    try{
+      const decoded=await withCameraTimeout(scanner.scanFile(file,true),12000);
+      if(session!==scanSession||html5Scanner!==scanner)return;
+      await verifyScannedToken(decoded);
+    }catch(error){
+      if(session!==scanSession)return;
+      setScanStatus('QR could not be read from that photo','invalid');
+      setScanResult('QR not found','invalid','Choose a clear photo with the whole QR code visible, or paste the pass code below.');
+      try{scanner.clear();}catch(e){}
+      if(html5Scanner===scanner)html5Scanner=null;
+    }finally{
+      scanPhotoInput.value='';
+    }
   }
   function isScanPageActive(){return scanSurface.classList.contains('scan-page-surface');}
   function setScanPageNavigation(){
@@ -1493,7 +1587,7 @@ replaceBrand();
     pageView.hidden=false;
     setScanPageNavigation();
     const hostedPlans=posts.filter(post=>post.isOwner);
-    const plans=hostedPlans.length?`<div class="scan-plan-list">${hostedPlans.map(plan=>`<button type="button" class="scan-plan-choice" data-scan-plan-id="${escapeHtml(plan.id)}"><span class="scan-plan-choice-icon">▣</span><span><strong>${escapeHtml(plan.title)}</strong><small>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</small></span><b>Scan <i>→</i></b></button>`).join('')}</div>`:'<div class="scan-page-empty"><span>▣</span><strong>No hosted events to scan</strong><p>Only an event organizer can scan guest passes. Create an event, or open Insights for one you already host.</p></div>';
+    const plans=hostedPlans.length?`<div class="scan-plan-list">${hostedPlans.map(plan=>`<button type="button" class="scan-plan-choice" data-scan-plan-id="${escapeHtml(plan.id)}"><span class="scan-plan-choice-icon">${icon('scan')}</span><span><strong>${escapeHtml(plan.title)}</strong><small>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</small></span><b>Scan <i>→</i></b></button>`).join('')}</div>`:'<div class="scan-page-empty"><span>'+icon('scan')+'</span><strong>No hosted events to scan</strong><p>Only an event organizer can scan guest passes. Create an event, or open Insights for one you already host.</p></div>';
     pageView.innerHTML=`<section class="scan-page"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>Scan a<br><em>guest pass.</em></h2><p>Select one of your events to start checking guests in. This is a full page, so your device Back control returns naturally to where you were.</p></div><button type="button" class="scan-page-close" id="close-scan-page">Close</button></header><section class="scan-page-picker"><p class="scan-page-label">Your hosted events</p>${plans}</section></section>`;
     pageView.querySelector('#close-scan-page')?.addEventListener('click',leaveScanPicker);
     pageView.querySelectorAll('[data-scan-plan-id]').forEach(button=>button.addEventListener('click',()=>openScanPage(button.dataset.scanPlanId)));
@@ -1506,7 +1600,7 @@ replaceBrand();
     homeElements.forEach(element=>element.hidden=true);
     pageView.hidden=false;
     setScanPageNavigation();
-    pageView.innerHTML=`<section class="scan-page scan-page-live"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>${escapeHtml(plan.title)}</h2><p>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</p></div><button type="button" class="scan-page-close" id="close-scan-page">Done</button></header><div class="scan-page-note" id="scan-page-note"><span id="scan-page-note-icon">▣</span><p><strong id="scan-page-note-title">Ready to check in guests</strong><small id="scan-page-note-detail">Use the camera or enter a pass code. Each pass can be checked in once.</small></p><button id="scan-page-next" type="button" hidden>Scan next guest</button></div><div id="scan-page-mount"></div></section>`;
+    pageView.innerHTML=`<section class="scan-page scan-page-live"><header class="scan-page-header"><div><p class="overline">Door check-in</p><h2>${escapeHtml(plan.title)}</h2><p>${escapeHtml(plan.location)} · ${formatDateTime(plan.starts_at)}</p></div><button type="button" class="scan-page-close" id="close-scan-page">Done</button></header><div class="scan-page-note" id="scan-page-note"><span id="scan-page-note-icon">${icon('scan')}</span><p><strong id="scan-page-note-title">Ready to check in guests</strong><small id="scan-page-note-detail">Use the camera or enter a pass code. Each pass can be checked in once.</small></p><button id="scan-page-next" type="button" hidden>Scan next guest</button></div><div id="scan-page-mount"></div></section>`;
     pageView.querySelector('#scan-page-mount').append(scanSurface);
     scanSurface.classList.add('scan-page-surface');
     scanModal.classList.remove('open');
@@ -1535,6 +1629,8 @@ replaceBrand();
   scanModal.onclick=event=>{ if(event.target===scanModal)closeScanModal(); };
   scanSubmit.onclick=()=>verifyScannedToken(scanInput.value);
   scanStartCamera.onclick=()=>startScanner();
+  scanPhotoAction.onclick=()=>scanPhotoInput.click();
+  scanPhotoInput.onchange=()=>scanQrPhoto(scanPhotoInput.files?.[0]);
   function prepareNextScan(){
     scanInput.value='';
     setScanResult('', '');
@@ -1645,8 +1741,11 @@ async function loadGroups(){
     if(rail) rail.innerHTML='<div class="nearby-empty" style="padding:14px;text-align:center;color:#6E6E73;font-size:11px;border:1px dashed #E8E8ED;border-radius:14px;background:#fff">Log in to see groups.</div>';
     return;
   }
-  if(list)list.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading groups...</div>';
+  if(list&&!list.dataset.loaded)list.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading groups...</div>';
+  const viewerId=currentUser.id;
   const {data,error}=await supabase.rpc('get_group_conversations');
+  if(viewerId!==currentUser?.id)return;
+  if(list)list.dataset.loaded='true';
   if(error){ if(list)list.innerHTML=`<div style="padding:16px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
   if(!data||!data.length){
     if(list)list.innerHTML='<div class="nearby-empty" style="padding:28px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font-weight:600;color:#1D1D1F">No groups yet</div><div style="font-size:12px;margin-top:6px">Create a private circle and add the people who belong in it.</div><button id="empty-create-group" class="publish-button" style="margin:16px auto 0;border-radius:999px;width:auto">＋ Create group</button></div>';
@@ -1667,15 +1766,25 @@ async function loadGroups(){
   list?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>openGroup(b.dataset.openGroup));
   rail?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>{ setPage('groups'); setTimeout(()=>openGroup(b.dataset.openGroup), 300); });
 }
-async function openGroup(groupId){
+async function openGroup(groupId,{restore=false}={}){
+  if(!supabase||!currentUser){loginModal?.classList.add('open');return;}
+  const previous=pageView.querySelector('[data-group-thread]');
+  const draft=previous?.dataset.groupThread===groupId?previous.querySelector('#group-message-input')?.value||'':'';
+  const wasInputFocused=previous?.querySelector('#group-message-input')===document.activeElement;
+  const wasManaging=Boolean(previous?.querySelector('details[open]'));
+  if(!restore)pushAppView({type:'group-chat',groupId});
   window.evenitActiveGroupId=groupId;
-  if(!supabase||!currentUser) return;
+  showInsightsShell();
+  pageView.innerHTML='<section class="group-chat-loading" role="status">Loading group…</section>';
+  const loading=pageView.firstElementChild;
+  const viewerId=currentUser.id;
   const [{data:group},{data:messages,error:messagesError},{data:members,error:membersError}]=await Promise.all([
     supabase.from('groups').select('id,name,description,max_members').eq('id',groupId).maybeSingle(),
     supabase.rpc('get_group_messages',{p_group_id:groupId}),
     supabase.rpc('get_group_members',{p_group_id:groupId})
   ]);
-  const me=(members||[]).find(member=>member.user_id===currentUser.id);
+  if(!loading.isConnected||currentUser?.id!==viewerId)return;
+  const me=(members||[]).find(member=>member.user_id===viewerId);
   if(!group||messagesError||membersError||!me){
     showToast('This private group is unavailable to your profile.');
     window.evenitActiveGroupId=null;
@@ -1688,33 +1797,78 @@ async function openGroup(groupId){
   const memberSummary=visibleMembers.map(member=>`<span class="group-member-chip" title="${escapeHtml(member.full_name||member.username||'Member')}"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><b>${escapeHtml((member.full_name||member.username||'M').slice(0,1))}</b></span>`).join('')+(members.length>visibleMembers.length?`<span class="group-member-more">+${members.length-visibleMembers.length}</span>`:'');
   const membersHtml=members.map(member=>`<div class="group-member-row"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><strong>${escapeHtml(member.full_name||member.username||'Member')}</strong><small>@${escapeHtml(member.username||'member')} · ${escapeHtml(member.role)}</small></div>${canManage&&member.user_id!==currentUser.id&&member.role!=='owner'?`<button type="button" class="group-member-remove" data-remove-group-member="${escapeHtml(member.user_id)}">Remove</button>`:''}</div>`).join('');
   pageView.innerHTML=`<section class="insights-page group-chat-page" data-group-thread="${escapeHtml(groupId)}"><button class="back-link" id="back-from-group">← Messages</button><div class="insights-header"><div><p class="overline">Private group</p><h2>${escapeHtml(title)}</h2><p style="color:#6E6E73;font-size:12px">${escapeHtml(group.description||'Only added members can read and reply here.')}</p></div><span style="background:#F2F0FF;color:#5E5CE6;border-radius:999px;padding:8px 12px;font:700 11px -apple-system,sans-serif">Private</span></div><section class="group-members-panel"><div class="group-members-heading"><div><strong>${members.length}/${group.max_members} members</strong><small>Only these profiles can see this group.</small></div><div class="group-member-chips">${memberSummary}</div></div>${canManage?`<details class="group-member-manager"><summary>Manage members <span>⌄</span></summary><div class="group-invite-control"><label for="group-add-search">Add a profile</label><input id="group-add-search" autocomplete="off" placeholder="Search name or @username" maxlength="80"><div id="group-invite-results" class="group-invite-results" aria-live="polite"></div></div><div class="group-member-list">${membersHtml}</div></details>`:''}</section><div class="group-thread" id="group-messages-${escapeHtml(groupId)}">${!messages||!messages.length?'<div class="group-thread-empty">No messages yet. Start the conversation.</div>':messages.map(message=>`<article class="group-bubble ${message.user_id===currentUser.id?'mine':''}"><div class="group-bubble-author">${message.user_id===currentUser.id?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${formatPostTime(message.created_at)}</small></article>`).join('')}</div><form id="group-message-form" class="group-message-form"><input id="group-message-input" placeholder="Message ${escapeHtml(title)}" maxlength="1000" required><button type="submit" class="publish-button">Send</button></form></section>`;
-  document.querySelector('#back-from-group').onclick=()=>{window.evenitActiveGroupId=null;setPage('messages');};
+  document.querySelector('#back-from-group').onclick=goBack;
+  const groupPage=pageView.querySelector('[data-group-thread]');
+  const thread=groupPage.querySelector('.group-thread');
+  const input=groupPage.querySelector('#group-message-input');
+  input.value=draft;
+  const manager=groupPage.querySelector('details');
+  if(manager)manager.open=wasManaging;
+  if(wasInputFocused)input.focus();
+  thread.scrollTop=thread.scrollHeight;
+  let refreshing=false;
+  let refreshAgain=false;
+  let memberSignature=(members||[]).map(member=>`${member.user_id}:${member.role}`).sort().join('|');
+  const refreshThread=async()=>{
+    if(!groupPage.isConnected)return;
+    if(refreshing){refreshAgain=true;return;}
+    refreshing=true;
+    try{
+      const [result,membership]=await Promise.all([
+        supabase.rpc('get_group_messages',{p_group_id:groupId}),
+        supabase.rpc('get_group_members',{p_group_id:groupId})
+      ]);
+      if(!groupPage.isConnected||currentUser?.id!==viewerId)return;
+      if(result.error||membership.error)throw result.error||membership.error;
+      if(!(membership.data||[]).some(member=>member.user_id===viewerId)){setPage('messages');showToast('You are no longer a member of this group.');return;}
+      const nextMemberSignature=(membership.data||[]).map(member=>`${member.user_id}:${member.role}`).sort().join('|');
+      if(nextMemberSignature!==memberSignature){
+        memberSignature=nextMemberSignature;
+        await openGroup(groupId,{restore:true});
+        return;
+      }
+      const nearBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<80;
+      thread.innerHTML=result.data?.length?result.data.map(message=>`<article class="group-bubble ${message.user_id===viewerId?'mine':''}"><div class="group-bubble-author">${message.user_id===viewerId?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${formatPostTime(message.created_at)}</small></article>`).join(''):'<div class="group-thread-empty">No messages yet. Start the conversation.</div>';
+      if(nearBottom)thread.scrollTop=thread.scrollHeight;
+    }catch(error){if(groupPage.isConnected)showToast(error.message||'Could not refresh messages.');}
+    finally{
+      refreshing=false;
+      if(refreshAgain&&groupPage.isConnected){refreshAgain=false;void refreshThread();}
+    }
+  };
+  window.refreshEvenitGroupThread=refreshThread;
   document.querySelector('#group-message-form').onsubmit=async (e)=>{
     e.preventDefault();
-    const input=document.querySelector('#group-message-input');
-    const body=input.value.trim(); if(!body) return;
-    const {error}=await supabase.from('group_messages').insert({group_id:groupId, user_id:currentUser.id, body});
-    if(error){ showToast(error.message); return; }
-    input.value=''; await Promise.all([openGroup(groupId),loadGroups()]);
+    const button=e.currentTarget.querySelector('[type="submit"]');
+    const body=input.value.trim(); if(!body||button.disabled)return;
+    button.disabled=true;
+    try{
+      const {error}=await supabase.from('group_messages').insert({group_id:groupId,user_id:viewerId,body});
+      if(error)throw error;
+      if(input.value.trim()===body)input.value='';
+      await Promise.all([refreshThread(),loadGroups()]);
+      if(thread.isConnected)thread.scrollTop=thread.scrollHeight;
+    }catch(error){showToast(error.message||'Could not send. Your message is still here.');}
+    finally{button.disabled=false;}
   };
   document.querySelectorAll('[data-remove-group-member]').forEach(button=>button.onclick=async()=>{
     button.disabled=true;
     const {data,error}=await supabase.rpc('remove_group_member',{p_group_id:groupId,p_user_id:button.dataset.removeGroupMember});
     if(error||data?.error){showToast(data?.error||error?.message||'Could not remove this profile');button.disabled=false;return;}
     showToast('Member removed');
-    await Promise.all([openGroup(groupId),loadGroups()]);
+    await Promise.all([openGroup(groupId,{restore:true}),loadGroups()]);
   });
   const search=document.querySelector('#group-add-search');
   const results=document.querySelector('#group-invite-results');
   let searchTimer;
   search?.addEventListener('input',()=>{
     clearTimeout(searchTimer);
-    const query=search.value.trim();
+    const query=search.value.trim().replace(/^@/,'');
     if(query.length<2){results.innerHTML=query?'Keep typing…':'';return;}
     results.innerHTML='Searching…';
     searchTimer=setTimeout(async()=>{
       const {data,error}=await supabase.rpc('search_group_invitees',{p_group_id:groupId,p_query:query});
-      if(search.value.trim()!==query)return;
+      if(!search.isConnected||search.value.trim().replace(/^@/,'')!==query)return;
       if(error){results.innerHTML='<span>Could not search profiles.</span>';return;}
       results.innerHTML=data?.length?data.map(profile=>`<button type="button" data-add-group-member="${escapeHtml(profile.id)}"><img src="${escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><span><strong>${escapeHtml(profile.full_name||profile.username||'Member')}</strong><small>@${escapeHtml(profile.username||'member')}</small></span><b>Add</b></button>`).join(''):'<span>No available profiles found.</span>';
       results.querySelectorAll('[data-add-group-member]').forEach(button=>button.onclick=async()=>{
@@ -1722,7 +1876,7 @@ async function openGroup(groupId){
         const {data:result,error:addError}=await supabase.rpc('add_group_member',{p_group_id:groupId,p_user_id:button.dataset.addGroupMember});
         if(addError||result?.error){showToast(result?.error||addError?.message||'Could not add this profile');button.disabled=false;return;}
         showToast(result.status==='already_member'?'Already in this group':'Profile added to the group');
-        await Promise.all([openGroup(groupId),loadGroups()]);
+        await Promise.all([openGroup(groupId,{restore:true}),loadGroups()]);
       });
     },240);
   });
@@ -1750,7 +1904,8 @@ document.querySelector('#group-form')?.addEventListener('submit', async e=>{
   showToast('Group created');
   document.querySelector('#group-modal')?.classList.remove('open');
   e.target.reset();
-  renderGroups();
+  await loadGroups();
+  if(data)openGroup(data);
 });
 async function loadMessageInbox(){
   const list=document.querySelector('#msg-primary-pane .message-list');
@@ -1762,8 +1917,11 @@ async function loadMessageInbox(){
     if(count)count.textContent='0';
     return;
   }
-  list.innerHTML='<div class="empty-message">Loading conversations…</div>';
+  if(!list.dataset.loaded)list.innerHTML='<div class="empty-message">Loading conversations…</div>';
+  const viewerId=currentUser.id;
   const {data,error}=await supabase.rpc('get_direct_message_inbox');
+  if(!list.isConnected||viewerId!==currentUser?.id)return;
+  list.dataset.loaded='true';
   if(error){
     list.innerHTML=`<div class="empty-message">Messages could not load.<br><span>${escapeHtml(error.message)}</span></div>`;
     if(count)count.textContent='0';
@@ -1896,10 +2054,11 @@ document.querySelector('#aftermath-files')?.addEventListener('change', e=>{
 
 
 let evenitLiveChannel=null;
-let evenitLiveRefreshTimer=null;
+const evenitLiveRefreshTimers=new Map();
 function scheduleEvenitLiveRefresh(kind){
-  clearTimeout(evenitLiveRefreshTimer);
-  evenitLiveRefreshTimer=setTimeout(()=>{
+  clearTimeout(evenitLiveRefreshTimers.get(kind));
+  evenitLiveRefreshTimers.set(kind,setTimeout(()=>{
+    evenitLiveRefreshTimers.delete(kind);
     const activePage=document.querySelector('[data-page].active')?.dataset.page;
     if(kind==='plans'){loadPlansPreservingHostWorkspace();if(activePage==='discover')renderDiscover();}
     if(kind==='insights'&&activeInsightsPlanId&&pageView?.querySelector('.host-approval-insights')){
@@ -1912,10 +2071,10 @@ function scheduleEvenitLiveRefresh(kind){
       else if(activePage==='messages'){loadMessageInbox();showToast('You have a new message');}
     }
     if(kind==='groups'){
-      if(pageView?.querySelector('[data-group-thread]')&&window.evenitActiveGroupId)openGroup(window.evenitActiveGroupId);
+      if(pageView?.querySelector('[data-group-thread]')&&window.evenitActiveGroupId)window.refreshEvenitGroupThread?.();
       else if(activePage==='messages'||activePage==='groups')loadGroups();
     }
-  },260);
+  },260));
 }
 function subscribeToEvenitLiveUpdates(){
   if(!supabase||!currentUser)return;
@@ -1934,6 +2093,7 @@ function subscribeToEvenitLiveUpdates(){
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_aftermath_posts'},()=>scheduleEvenitLiveRefresh('aftermath'))
     .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('notifications'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'sender_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'group_messages'},()=>scheduleEvenitLiveRefresh('groups'))
     .on('postgres_changes',{event:'*',schema:'public',table:'group_members',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('groups'))
     .subscribe();
@@ -1968,7 +2128,9 @@ function refreshEvenitLiveData({quiet=false}={}){
       const activePage=document.querySelector('[data-page].active')?.dataset.page;
       if(activePage==='discover')await loadFollowingEvents();
       if(activePage==='notifications')await renderNotifications();
-      if(activePage==='messages')await loadGroups();
+      if(pageView.querySelector('[data-group-thread]'))await window.refreshEvenitGroupThread?.();
+      else if(pageView.querySelector('.direct-message-page'))await window.refreshEvenitDirectThread?.();
+      else if(activePage==='messages'||activePage==='groups')await Promise.all([loadGroups(),loadMessageInbox()]);
       setEvenitConnectionState(true,'Live updates are connected');
       if(!quiet)showToast('Everything is up to date');
     }catch(error){
@@ -2042,13 +2204,13 @@ updateMobileHeader=function(page){
   header.classList.toggle('page-messages',activePage==='messages'||activePage==='groups');
   if(activePage!=='discover'&&searchPanel)searchPanel.hidden=true;
   if(activePage==='discover'){
-    action.innerHTML='<span>⌕</span>';
+    action.innerHTML='<span>'+icon('search')+'</span>';
     action.setAttribute('aria-label','Search events');
   }else if(activePage==='messages'||activePage==='groups'){
-    action.innerHTML='<span>☷</span>';
+    action.innerHTML='<span>'+icon('filter')+'</span>';
     action.setAttribute('aria-label','Filter messages');
   }else{
-    action.innerHTML='<span>♡</span><b class="badge">3</b>';
+    action.innerHTML='<span>'+icon('heart')+'</span>';
     action.setAttribute('aria-label','Open notifications');
   }
 };
@@ -2078,7 +2240,7 @@ updateMobileHeader();
 // belong exclusively to Home, so they are not repeated here.
 const renderAftermathOnlyDiscover=renderDiscover;
 renderDiscover=function(){
-  pageView.innerHTML=`<div class="page-topbar discover-topbar"><label class="topbar-search">⌕<input id="discover-search" placeholder="Search aftermath, people, places"></label></div><section class="discover-aftermath"><div class="discover-section-heading"><h3>Aftermath</h3></div><div id="discover-aftermath-feed"></div></section>`;
+  pageView.innerHTML=`<div class="page-topbar discover-topbar"><label class="topbar-search">${icon('search')}<input id="discover-search" aria-label="Search aftermath, people, places" placeholder="Search aftermath, people, places"></label></div><section class="discover-aftermath"><div class="discover-section-heading"><h3>Aftermath</h3></div><div id="discover-aftermath-feed"></div></section>`;
   loadAftermathFeed(document.querySelector('#discover-aftermath-feed'));
   document.querySelector('#discover-search')?.addEventListener('input',event=>{
     const query=event.target.value.trim().toLowerCase();
@@ -2107,7 +2269,7 @@ function renderHomeEventCards(){
           <img src="${escapeHtml(post.avatar)}" alt="">
           <span><strong>${escapeHtml(post.user)}</strong><small>${escapeHtml(post.category||'Community event')}</small></span>
         </button>
-        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">↗</button>
+        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">${icon('share')}</button>
       </header>
       <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
         ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
@@ -2471,7 +2633,7 @@ renderHomeEventCards=function(){
           <img src="${escapeHtml(post.avatar)}" alt="">
           <span><strong>${escapeHtml(post.user)}</strong><small>${escapeHtml(post.category||'Community event')}</small></span>
         </button>
-        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">↗</button>
+        <button class="home-event-share" type="button" data-home-share="${index}" aria-label="Share ${escapeHtml(post.title)}">${icon('share')}</button>
       </header>
       <div class="home-event-art ${escapeHtml(post.image||'pic-one')}" data-cover-style="${escapeHtml(coverStyle)}">
         ${post.imageUrl?`<img class="home-event-cover-image" src="${escapeHtml(post.imageUrl)}" alt="Cover for ${escapeHtml(post.title)}">`:''}
@@ -2955,14 +3117,14 @@ function toggleProfileMenu(trigger){
   panel.className='profile-menu-panel';
   panel.setAttribute('role','menu');
   panel.innerHTML=`
-    <button type="button" role="menuitem" data-profile-menu-action="settings"><span>⚙</span>Settings</button>
-    <button type="button" role="menuitem" data-profile-menu-action="saved"><span>◇</span>Saved</button>
+    <button type="button" role="menuitem" data-profile-menu-action="settings"><span>${icon('settings')}</span>Settings</button>
+    <button type="button" role="menuitem" data-profile-menu-action="saved"><span>${icon('bookmark')}</span>Saved</button>
     <div class="profile-menu-label">Appearance</div>
-    <button type="button" role="menuitem" data-profile-menu-action="theme-light" aria-pressed="false"><span>☀</span>Light mode</button>
-    <button type="button" role="menuitem" data-profile-menu-action="theme-dark" aria-pressed="false"><span>◐</span>Dark mode</button>
-    <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span>↓</span>Download Android app</a>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-light" aria-pressed="false"><span>${icon('sun')}</span>Light mode</button>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-dark" aria-pressed="false"><span>${icon('moon')}</span>Dark mode</button>
+    <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span>${icon('download')}</span>Download Android app</a>
     <div class="profile-menu-divider"></div>
-    <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span>${signedIn?'↗':'→'}</span>${signedIn?'Log out':'Log in'}</button>`;
+    <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span>${icon('logout')}</span>${signedIn?'Log out':'Log in'}</button>`;
   trigger.parentElement?.append(panel);
   trigger.setAttribute('aria-expanded','true');
   panel.querySelectorAll('[data-profile-menu-action]').forEach(button=>button.addEventListener('click',async()=>{
@@ -3046,10 +3208,14 @@ document.addEventListener('click',event=>{
 const profileAwareSetPage=setPage;
 setPage=function(page){
   setInsightsDockScan(null);
+  window.evenitActiveGroupId=null;
+  window.refreshEvenitGroupThread=null;
   document.querySelector('#pulse-bar')?.toggleAttribute('hidden',page!=='home');
   profileAwareSetPage(page);
   if(page==='scan')renderScanPage();
 };
+
+window.setPage=(page)=>setPage(page);
 
 // Capacitor's Android backButton event is separate from browser popstate.
 // Route it through the exact same stack so native, mobile-web, and desktop

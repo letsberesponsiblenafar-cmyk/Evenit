@@ -1,4 +1,4 @@
-name: Deploy upneXt to GitHub Pages
+name: Check and deploy Evenit to GitHub Pages
 
 on:
   push:
@@ -23,6 +23,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check syntax and interaction regressions
+        run: npm test
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site

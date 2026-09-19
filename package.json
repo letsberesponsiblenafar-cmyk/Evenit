@@ -1,5 +1,8 @@
 {
   "scripts": {
+    "preview": "node scripts/preview.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "npm run check && node --test scripts/test-navigation.mjs scripts/test-live-updates.mjs scripts/test-camera.mjs",
     "mobile:copy": "node scripts/build-mobile.mjs",
     "mobile:sync": "npm run mobile:copy && npx cap sync android",
     "android:apk": "npm run mobile:sync && cd android && gradlew.bat assembleDebug"

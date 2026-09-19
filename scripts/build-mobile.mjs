@@ -5,8 +5,8 @@ const root = resolve(import.meta.dirname, '..');
 const output = resolve(root, 'mobile', 'www');
 const files = [
   'index.html', 'style.css', 'feed.css', 'composer.css', 'apple-polish.css',
-  'experience-refresh.css', 'workspace.css', 'profile-refresh.css', 'interaction-refresh.css', 'scan-refresh.css',
-  'app.js', 'composer.js', 'navigation.js', 'native-bridge.js', 'app-update.json',
+  'experience-refresh.css', 'workspace.css', 'profile-refresh.css', 'interaction-refresh.css', 'scan-refresh.css', 'refinement.css',
+  'app.js', 'composer.js', 'navigation.js', 'native-bridge.js', 'icons.js', 'app-update.json',
   'supabase-config.js', 'logo.svg'
 ];
 

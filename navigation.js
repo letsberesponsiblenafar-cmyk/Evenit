@@ -19,7 +19,9 @@
   }
 
   function routeFromHash(){
-    const parts=decodeURIComponent(window.location.hash.replace(/^#/,'')).split('/');
+    const parts=window.location.hash.replace(/^#/,'').split('/').map(part=>{
+      try{return decodeURIComponent(part)}catch{return part}
+    });
     if(parts[0]==='insights'&&parts[1])return{kind:'insights',planId:parts[1],from:pageRoute('home')};
     if(parts[0]==='public-profile'&&parts[1])return{kind:'public-profile',profileId:parts[1],from:pageRoute('home')};
     if(parts[0]==='event'&&parts[1])return{kind:'public-event',planId:parts[1],from:pageRoute('home')};
@@ -49,7 +51,9 @@
 
   function pushRoute(route){
     route=snapshot(route);
-    if(sameRoute(route,currentRoute))return;
+    const storedRoute=window.history.state?.route;
+    if(sameRoute(route,storedRoute||currentRoute)&&!window.history.state?.evenitAppView)return;
+    transition++;
     currentRoute=route;
     window.history.pushState(appState(route),'',routeUrl(route));
   }
@@ -57,8 +61,7 @@
   function replayClick(element){
     if(!element)return false;
     replaying=true;
-    element.click();
-    replaying=false;
+    try{element.click()}finally{replaying=false}
     return true;
   }
 
@@ -68,26 +71,24 @@
 
   function profileTabElement(tab){
     const buttons=[...document.querySelectorAll('.profile-tabs button')];
-    return buttons.find(button=>{
-      const text=button.textContent.toLowerCase();
-      return tab==='joined'?text.includes('joined'):tab==='saved'?text.includes('saved'):tab==='lived'?text.includes('lived'):text.includes('your plans');
-    });
+    return buttons.find(button=>profileTabName(button)===(tab==='plans'?'your-plans':tab));
   }
 
   function activatePage(route,done){
+    const expected=transition;
     const link=document.querySelector(`[data-page="${route.page}"]`);
     if(!link){
       // Settings and Saved are opened from Profile's menu rather than the
       // permanent dock. They still need to restore correctly on Back/Forward.
       if(typeof window.setPage==='function')window.setPage(route.page);
-      if(done)setTimeout(done,0);
+      if(done)setTimeout(()=>{if(expected===transition)done()},0);
       return;
     }
     closeMobileMenu();
     replayClick(link);
     if(route.page==='profile'&&route.tab&&route.tab!=='your-plans'){
-      setTimeout(()=>{replayClick(profileTabElement(route.tab));if(done)done()},0);
-    }else if(done)setTimeout(done,0);
+      setTimeout(()=>{if(expected!==transition)return;replayClick(profileTabElement(route.tab));if(done)done()},0);
+    }else if(done)setTimeout(()=>{if(expected===transition)done()},0);
   }
 
   function matchingElement(attribute,value){
@@ -95,6 +96,7 @@
   }
 
   function activateRoute(route,done){
+    const expected=transition;
     if(!route){if(done)done();return}
     if(route.kind==='page'){activatePage(route,done);return}
     if(route.kind==='public-event'){
@@ -108,7 +110,6 @@
       return;
     }
     activateRoute(route.from||pageRoute('home'),()=>{
-      const expected=++transition;
       const retry=attempt=>{
         if(expected!==transition)return;
         const target=route.kind==='insights'?matchingElement('data-insights-id',route.planId):matchingElement('data-public-profile-id',route.profileId)||matchingElement('data-profile-id',route.profileId);
@@ -133,13 +134,15 @@
   }
 
   function profileTabName(button){
+    const tab=button.dataset.profileTab;
+    if(tab)return tab==='plans'?'your-plans':tab;
     const text=button.textContent.toLowerCase();
     return text.includes('joined')?'joined':text.includes('saved')?'saved':text.includes('lived')?'lived':'your-plans';
   }
 
   window.addEventListener('popstate',event=>{
-    if(event.state?.evenitAppView)return;
-    const route=event.state?.[stateKey]?.route||routeFromHash();
+    const route=event.state?.[stateKey]&&event.state.route||routeFromHash();
+    if(event.state?.evenitAppView){currentRoute=snapshot(route);transition++;return;}
     renderRoute(route);
   });
 
