@@ -409,8 +409,9 @@ function renderAftermathCards(items,{showEventContext=true}={}){
     const authorLabel=post.username?'@'+post.username:(post.full_name||'Evenit member');
     const mediaHtml=renderAftermathMedia(post);
     const eventContext=showEventContext?'<button class="aftermath-event-context" type="button" data-aftermath-event="'+escapeHtml(post.plan_id||'')+'" data-event-title="'+escapeHtml(post.plan_title||'')+'" data-event-location="'+escapeHtml(post.plan_location||'')+'"><span class="aftermath-event-badge">Lived</span><span class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'Event details')+'</span>'+(post.plan_location?'<span class="aftermath-event-loc">\uD83D\uDCCD '+escapeHtml(post.plan_location)+'</span>':'')+'</span><span class="aftermath-event-arrow" aria-hidden="true">›</span></button>':'';
+    const ownerMenu=currentUser?.id===post.author_id?'<div class="aftermath-card-menu"><button class="aftermath-menu-trigger" type="button" data-aftermath-menu="'+escapeHtml(post.id)+'" aria-label="Aftermath options" aria-expanded="false">'+icon('more')+'</button><div class="aftermath-menu-popover" role="menu" hidden><button type="button" role="menuitem" data-aftermath-delete="'+escapeHtml(post.id)+'"><span aria-hidden="true">×</span><span><strong>Delete aftermath</strong><small>Remove this post permanently</small></span></button></div></div>':'';
     return '<article class="aftermath-card" data-aftermath-id="'+escapeHtml(post.id)+'">'
-      +'<button class="aftermath-author-line" type="button" data-public-profile-id="'+escapeHtml(post.author_id)+'">'+escapeHtml(authorLabel)+'</button>'
+      +'<header class="aftermath-card-header"><button class="aftermath-author-line" type="button" data-public-profile-id="'+escapeHtml(post.author_id)+'">'+escapeHtml(authorLabel)+'</button>'+ownerMenu+'</header>'
       +eventContext
       +'<div class="aftermath-body">'+escapeHtml(post.body)+'</div>'
       +(tags?'<div class="aftermath-tags">'+tags+'</div>':'')
@@ -480,6 +481,19 @@ function wireFollowingJoinButtons(){
 }
 function wireAftermathActions(){
   wireAftermathCarousels();
+  document.querySelectorAll('[data-aftermath-menu]').forEach(button=>button.onclick=event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    const popover=button.nextElementSibling;
+    const opening=Boolean(popover?.hidden);
+    document.querySelectorAll('.aftermath-menu-popover').forEach(menu=>{menu.hidden=true;menu.previousElementSibling?.setAttribute('aria-expanded','false');});
+    if(popover){popover.hidden=!opening;button.setAttribute('aria-expanded',String(opening));}
+  });
+  document.querySelectorAll('[data-aftermath-delete]').forEach(button=>button.onclick=async event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    await deleteAftermathPost(button.dataset.aftermathDelete,button);
+  });
   document.querySelectorAll('[data-aftermath-like]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.aftermathLike;const liked=b.classList.contains('liked');
     if(!supabase||!currentUser){showToast('Log in to like');return;}
@@ -1034,6 +1048,62 @@ const signupModal=document.querySelector('#signup-modal');document.querySelector
 document.querySelector('#post-form').onsubmit=async e=>{e.preventDefault();const form=e.target;const data=new FormData(form);const publishButton=form.querySelector('[type="submit"]');if(!supabase){showToast('Connection setup is unavailable. Reopen the app while online.');return}if(!navigator.onLine){showToast('You are offline. Connect to Wi-Fi or mobile data, then try again.');return}const {data:sessionData,error:sessionError}=await supabase.auth.getSession();const liveUser=sessionData?.session?.user;if(sessionError||!liveUser){currentUser=null;updateAccountUI();showToast('Your login expired. Please log in again before publishing.');loginModal.classList.add('open');return}currentUser=liveUser;const capacityValue=String(data.get('capacity')||'').trim();const capacity=capacityValue?Number(capacityValue):null;if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1)){showToast('Attendance limit must be a whole number greater than zero');return}const startsValue=String(data.get('when')||'').trim();const startsAt=startsValue?new Date(startsValue):null;if(!startsAt||Number.isNaN(startsAt.getTime())){showToast('Choose a valid date and time for the event.');return}publishButton.disabled=true;publishButton.textContent='Publishing…';try{let {data:profile,error:profileError}=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();if(profileError)throw profileError;if(!profile){const metadata=currentUser.user_metadata||{};const {error:createProfileError}=await supabase.from('profiles').upsert({id:currentUser.id,username:metadata.username||currentUser.email.split('@')[0],full_name:metadata.full_name||null});if(createProfileError)throw new Error('Your profile needs to finish syncing: '+createProfileError.message);const result=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();profile=result.data}const {data:plan,error}=await supabase.from('plans').insert({user_id:currentUser.id,title:String(data.get('title')).trim(),location:String(data.get('where')).trim(),starts_at:startsAt.toISOString(),caption:String(data.get('caption')||'').trim()||null,category:data.get('category'),capacity,neighborhood:profile?.neighborhood||null,requires_college_verification:data.get('requires_college_verification')==='on'}).select('id').single();if(error)throw error;if(profile?.latitude!==null&&profile?.latitude!==undefined&&profile?.longitude!==null&&profile?.longitude!==undefined){const {error:locationError}=await supabase.from('plan_locations').upsert({plan_id:plan.id,latitude:profile.latitude,longitude:profile.longitude,updated_at:new Date().toISOString()});if(locationError)showToast('Plan published; nearby-distance matching is still syncing.')}const passMemo=String(data.get('pass_memo')||'').trim();if(passMemo){const {error:passError}=await supabase.from('plan_passes').upsert({plan_id:plan.id,memo:passMemo,updated_at:new Date().toISOString()});if(passError)showToast('Plan published; the entry note could not be saved.')}modal.classList.remove('open');form.reset();await loadPlans();showToast('Your plan is live on Evenit ✦')}catch(error){console.error('Plan publish failed',error);showToast(`Could not publish: ${error?.message||'Please try again.'}`)}finally{publishButton.disabled=false;publishButton.innerHTML='Create plan <span>→</span>'}};
 function showToast(message){const toast=document.querySelector('#toast');toast.textContent=message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2400)}
 function withEvenitTimeout(promise,ms,message){let timeout;return Promise.race([promise,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error(message)),ms)})]).finally(()=>clearTimeout(timeout))}
+function requestDestructiveConfirmation({eyebrow='Please confirm',title,message,confirmLabel='Delete'}){
+  return new Promise(resolve=>{
+    document.querySelector('#destructive-confirmation')?.remove();
+    const backdrop=document.createElement('div');
+    backdrop.id='destructive-confirmation';
+    backdrop.className='destructive-confirmation';
+    backdrop.innerHTML=`<section class="destructive-confirmation-card" role="alertdialog" aria-modal="true" aria-labelledby="destructive-confirmation-title" aria-describedby="destructive-confirmation-copy"><span class="destructive-confirmation-mark" aria-hidden="true">!</span><p class="overline">${escapeHtml(eyebrow)}</p><h2 id="destructive-confirmation-title">${escapeHtml(title)}</h2><p id="destructive-confirmation-copy">${escapeHtml(message)}</p><div class="destructive-confirmation-actions"><button type="button" data-delete-cancel>Keep it</button><button type="button" class="confirm-delete" data-delete-confirm>${escapeHtml(confirmLabel)}</button></div></section>`;
+    document.body.append(backdrop);
+    const finish=value=>{backdrop.classList.add('is-closing');setTimeout(()=>backdrop.remove(),150);resolve(value);};
+    backdrop.querySelector('[data-delete-cancel]')?.addEventListener('click',()=>finish(false),{once:true});
+    backdrop.querySelector('[data-delete-confirm]')?.addEventListener('click',()=>finish(true),{once:true});
+    backdrop.addEventListener('click',event=>{if(event.target===backdrop)finish(false);},{once:true});
+    const onKey=event=>{if(event.key==='Escape'){document.removeEventListener('keydown',onKey);finish(false);}};
+    document.addEventListener('keydown',onKey);
+    backdrop.addEventListener('transitionend',()=>document.removeEventListener('keydown',onKey),{once:true});
+    requestAnimationFrame(()=>backdrop.classList.add('is-open'));
+    backdrop.querySelector('[data-delete-cancel]')?.focus();
+  });
+}
+function storageObjectPath(publicUrl,bucket){
+  try{
+    const parsed=new URL(publicUrl);
+    const marker=`/storage/v1/object/public/${bucket}/`;
+    const start=parsed.pathname.indexOf(marker);
+    return start<0?null:decodeURIComponent(parsed.pathname.slice(start+marker.length));
+  }catch{return null;}
+}
+async function deleteAftermathPost(postId,button){
+  if(!supabase||!currentUser){showToast('Log in before deleting an aftermath.');return false;}
+  const confirmed=await requestDestructiveConfirmation({eyebrow:'Delete aftermath',title:'Remove this moment?',message:'The post, its comments, reactions, and uploaded media will be permanently removed.',confirmLabel:'Delete aftermath'});
+  if(!confirmed)return false;
+  button.disabled=true;
+  const original=button.innerHTML;
+  button.innerHTML='<span aria-hidden="true">…</span><span><strong>Deleting</strong><small>Removing this post</small></span>';
+  try{
+    const {data,error}=await supabase.rpc('delete_aftermath_post',{p_post_id:postId});
+    if(error)throw error;
+    const paths=(data?.media_urls||[]).map(url=>storageObjectPath(url,'aftermath-media')).filter(Boolean);
+    if(paths.length){
+      const {error:storageError}=await supabase.storage.from('aftermath-media').remove(paths);
+      if(storageError)console.warn('Aftermath database record was removed, but media cleanup needs a retry.',storageError);
+    }
+    document.querySelectorAll('[data-aftermath-id]').forEach(card=>{
+      if(card.dataset.aftermathId!==postId)return;
+      card.classList.add('is-removing');
+      setTimeout(()=>card.remove(),180);
+    });
+    showToast('Aftermath deleted permanently.');
+    return true;
+  }catch(error){
+    button.disabled=false;
+    button.innerHTML=original;
+    showToast(error?.message||'Could not delete this aftermath.');
+    return false;
+  }
+}
 document.querySelector('#post-form').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget;const data=new FormData(form);const button=form.querySelector('[type="submit"]');try{if(!navigator.onLine)throw new Error('You are offline. Connect to Wi-Fi or mobile data, then try again.');const user=await withEvenitTimeout(getFreshEvenitUser(),8000,'Your login check took too long. Please try again.');const startsValue=String(data.get('when')||'').trim();const startsAt=startsValue?new Date(startsValue):null;if(!startsAt||Number.isNaN(startsAt.getTime()))throw new Error('Choose a valid date and time for the event.');const capacityValue=String(data.get('capacity')||'').trim();const capacity=capacityValue?Number(capacityValue):null;if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1))throw new Error('Attendance limit must be a whole number greater than zero.');button.disabled=true;button.textContent='Publishing…';const {data:planId,error}=await withEvenitTimeout(supabase.rpc('create_plan_atomically',{p_title:String(data.get('title')||''),p_location:String(data.get('where')||''),p_starts_at:startsAt.toISOString(),p_caption:String(data.get('caption')||''),p_category:String(data.get('category')||'Social'),p_capacity:capacity,p_requires_college_verification:data.get('requires_college_verification')==='on'}),15000,'Publishing timed out. Check your connection and try again.');if(error)throw error;if(!planId)throw new Error('The event was not confirmed by the database.');modal.classList.remove('open');form.reset();await refreshEvenitLiveData({quiet:true});showToast('Your event is live everywhere ✦')}catch(error){showToast(`Could not publish: ${error?.message||'Please try again.'}`)}finally{button.disabled=false;button.innerHTML='Create plan <span>→</span>'}};
 document.querySelectorAll('.story').forEach(story=>story.onclick=()=>{ if(story.classList.contains('add-story')){ modal.classList.add('open'); } else { showToast('Stories are coming next \u2726'); } });
 document.querySelectorAll('.suggestion button').forEach(button=>button.onclick=()=>{button.textContent=button.textContent==='Follow'?'Following':'Follow';showToast(button.textContent==='Following'?'You are now following this profile ✦':'Profile unfollowed')});
@@ -2122,6 +2192,10 @@ function renderAftermathFilePreviews(){
     renderAftermathFilePreviews();
   });
 }
+document.addEventListener('click',event=>{
+  if(event.target.closest('.aftermath-card-menu'))return;
+  document.querySelectorAll('.aftermath-menu-popover').forEach(menu=>{menu.hidden=true;menu.previousElementSibling?.setAttribute('aria-expanded','false');});
+});
 function resetAftermathComposer(){
   aftermathDraftFiles=[];
   const input=document.querySelector('#aftermath-files');
@@ -2962,6 +3036,45 @@ async function loadHostVerificationDetails(planId){
   return new Map((data||[]).map(item=>[item.user_id,item]));
 }
 
+async function deleteUpcomingEvent(planId,button){
+  const post=posts.find(item=>item.id===planId);
+  if(!post?.isOwner){showToast('Only the organizer can delete this event.');return false;}
+  if(!post.starts_at||new Date(post.starts_at).getTime()<=Date.now()){
+    showToast('This event has already occurred and can no longer be deleted.');
+    return false;
+  }
+  const confirmed=await requestDestructiveConfirmation({eyebrow:'Cancel event',title:`Delete ${post.title}?`,message:'This permanently removes the event, guest requests, passes, and notifications. This cannot be undone.',confirmLabel:'Delete event'});
+  if(!confirmed)return false;
+  button.disabled=true;
+  button.textContent='Deleting event…';
+  try{
+    const {data,error}=await supabase.rpc('delete_future_plan',{p_plan_id:planId});
+    if(error)throw error;
+    const coverPath=storageObjectPath(data?.image_url,'plan-covers');
+    if(coverPath){
+      const {error:storageError}=await supabase.storage.from('plan-covers').remove([coverPath]);
+      if(storageError)console.warn('Event was deleted, but its cover cleanup needs a retry.',storageError);
+    }
+    posts=posts.filter(item=>item.id!==planId);
+    savedEventIds.delete(planId);
+    joinedEventIds.delete(planId);
+    localStorage.setItem('evenit-saved-events',JSON.stringify([...savedEventIds]));
+    localStorage.setItem('evenit-joined-events',JSON.stringify([...joinedEventIds]));
+    activeInsightsPlanId=null;
+    setInsightsDockScan(null);
+    showToast('Event deleted permanently.');
+    await refreshEvenitLiveData({quiet:true});
+    if(window.history.state?.evenitAppView?.type==='insights')window.history.back();
+    else setPage('profile');
+    return true;
+  }catch(error){
+    button.disabled=false;
+    button.textContent='Delete event';
+    showToast(error?.message||'Could not delete this event.');
+    return false;
+  }
+}
+
 function renderRequestAnswers(answers){
   return Array.isArray(answers)&&answers.length
     ?`<dl class="request-answers">${answers.map(answer=>`<div><dt>${escapeHtml(answer.question||'Question')}</dt><dd>${escapeHtml(answer.answer||'—')}</dd></div>`).join('')}</dl>`
@@ -3047,10 +3160,13 @@ renderInsights=async function(planId,options={}){
   const confirmed=attendees.filter(item=>item.status==='confirmed'&&!item.attended);
   const attended=attendees.filter(item=>item.attended);
   const passesIssued=confirmed.length+attended.length;
+  const eventCanBeDeleted=Boolean(plan.starts_at&&new Date(plan.starts_at).getTime()>Date.now());
+  const eventControls=eventCanBeDeleted?`<section class="insights-danger-zone"><div><p class="approval-eyebrow">Event controls</p><h3>Delete this event</h3><p>Available only before the event starts. Guest requests, passes, and related records will also be removed.</p></div><button type="button" id="delete-upcoming-event">Delete event</button></section>`:'';
   const person=item=>`<button class="attendee-card ${item.attended?'is-attended':''}" data-public-profile-id="${escapeHtml(item.id)}"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="${escapeHtml(item.full_name||item.username)}"><span><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small></span><b>${item.attended?'Attended ✓':'Pass sent'}</b></button>`;
   const candidate=item=>{const verification=verificationByUser.get(item.id);const answerCount=Array.isArray(item.answers)?item.answers.length:0;return`<article class="pass-candidate"><label class="pass-candidate-select"><input type="checkbox" data-pass-candidate value="${escapeHtml(item.id)}" aria-label="Select ${escapeHtml(item.full_name||item.username||'request')}"></label><button class="pass-candidate-review" type="button" data-request-review="${escapeHtml(item.id)}"><span class="pass-candidate-avatar"><img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""></span><span class="pass-candidate-main"><span class="pass-candidate-title"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><em>${item.status==='waitlisted'?'Waitlisted':'New request'}</em></span><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small><span class="pass-candidate-summary">${answerCount?`${answerCount} ${answerCount===1?'answer':'answers'} ready to review`:'No guest questions'}${post.requiresCollegeVerification?verification?' · Verification shared':' · Verification pending':''}</span></span><span class="pass-candidate-open">Review <b>→</b></span></button></article>`;};
-  pageView.innerHTML=`<div class="insights-page host-approval-insights"><header class="insights-hero"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div><span class="insights-live-state"><i></i>Live</span></header><section class="insight-metric-grid" aria-label="Event performance"><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reached</span></div><div class="insights-metric primary"><strong>${Number(metrics.interested??interested.length)}</strong><span>Interested</span></div><div class="insights-metric"><strong>${Number(metrics.waitlisted||0)}</strong><span>Waitlisted</span></div><div class="insights-metric"><strong>${passesIssued}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Checked in</span></div></section><section class="insights-utility insights-scan-priority"><div><p class="approval-eyebrow">At the door</p><strong>Scan guest pass</strong><span>Check in an approved guest in seconds.</span></div><button class="scan-button" id="open-scan">Scan pass <span>↗</span></button></section><section class="insights-section pass-approval-section"><div class="approval-heading"><div><p class="approval-eyebrow">Requests</p><h3>People waiting for a pass</h3><p>Open any request to review the guest’s profile, answers, and event-only verification. Or select several people and approve them together.</p></div><div class="approval-actions"><span id="pass-selection-count" aria-live="polite">Select requests</span><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty"><strong>No requests yet</strong><span>New interest requests will appear here automatically.</span></div>'}</div></section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Issued</p><h3>Pass holders</h3></div><span>${confirmed.length}</span></div>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty"><strong>No passes sent</strong><span>Approved guests will appear here.</span></div>'}</section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Attendance</p><h3>Checked in</h3></div><span>${attended.length}</span></div>${attended.length?attended.map(person).join(''):'<div class="insights-empty"><strong>No one checked in yet</strong><span>Use Scan pass at the door to record attendance.</span></div>'}</section></div>`;
+  pageView.innerHTML=`<div class="insights-page host-approval-insights"><header class="insights-hero"><div><p class="overline">Host approvals</p><h2>${escapeHtml(plan.title||post.title)}</h2><p class="insights-subtitle">${escapeHtml(plan.location||post.location)} · ${formatDateTime(plan.starts_at||post.starts_at)}</p></div><span class="insights-live-state"><i></i>Live</span></header><section class="insight-metric-grid" aria-label="Event performance"><div class="insights-metric"><strong>${metrics.reach||0}</strong><span>Reached</span></div><div class="insights-metric primary"><strong>${Number(metrics.interested??interested.length)}</strong><span>Interested</span></div><div class="insights-metric"><strong>${Number(metrics.waitlisted||0)}</strong><span>Waitlisted</span></div><div class="insights-metric"><strong>${passesIssued}</strong><span>Passes sent</span></div><div class="insights-metric"><strong>${attended.length}</strong><span>Checked in</span></div></section><section class="insights-utility insights-scan-priority"><div><p class="approval-eyebrow">At the door</p><strong>Scan guest pass</strong><span>Check in an approved guest in seconds.</span></div><button class="scan-button" id="open-scan">Scan pass <span>↗</span></button></section><section class="insights-section pass-approval-section"><div class="approval-heading"><div><p class="approval-eyebrow">Requests</p><h3>People waiting for a pass</h3><p>Open any request to review the guest’s profile, answers, and event-only verification. Or select several people and approve them together.</p></div><div class="approval-actions"><span id="pass-selection-count" aria-live="polite">Select requests</span><button id="issue-selected-passes" class="publish-button" type="button" ${interested.length?'':'disabled'}>Send passes <span>→</span></button></div></div><div class="pass-candidate-list">${interested.length?interested.map(candidate).join(''):'<div class="insights-empty"><strong>No requests yet</strong><span>New interest requests will appear here automatically.</span></div>'}</div></section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Issued</p><h3>Pass holders</h3></div><span>${confirmed.length}</span></div>${confirmed.length?confirmed.map(person).join(''):'<div class="insights-empty"><strong>No passes sent</strong><span>Approved guests will appear here.</span></div>'}</section><section class="insights-section insights-roster"><div class="roster-heading"><div><p class="approval-eyebrow">Attendance</p><h3>Checked in</h3></div><span>${attended.length}</span></div>${attended.length?attended.map(person).join(''):'<div class="insights-empty"><strong>No one checked in yet</strong><span>Use Scan pass at the door to record attendance.</span></div>'}</section>${eventControls}</div>`;
   pageView.querySelector('#open-scan')?.addEventListener('click',()=>openScanModal(planId));
+  pageView.querySelector('#delete-upcoming-event')?.addEventListener('click',event=>deleteUpcomingEvent(planId,event.currentTarget));
   pageView.querySelectorAll('[data-request-review]').forEach(button=>button.addEventListener('click',()=>openHostRequestReview(planId,button.dataset.requestReview)));
   const updatePassSelection=()=>{
     const total=pageView.querySelectorAll('[data-pass-candidate]:checked').length;

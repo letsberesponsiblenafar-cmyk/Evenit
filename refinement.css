@@ -530,6 +530,43 @@ html[data-evenit-theme="dark"] .scan-reader { background: #101012 !important; }
 .profile-menu-account .profile-menu-icon { background: var(--ui-coral-soft); color: var(--ui-coral); }
 .mobile-header .mobile-header-create, .mobile-header .mobile-header-action { background: transparent !important; color: var(--ui-ink) !important; box-shadow: none !important; }
 
+/* Owner-only deletion controls. */
+.aftermath-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding-right: 12px; }
+.aftermath-card-header .aftermath-author-line { min-width: 0; }
+.aftermath-card-menu { position: relative; flex: 0 0 auto; }
+.aftermath-menu-trigger { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ui-muted); cursor: pointer; }
+.aftermath-menu-trigger:hover, .aftermath-menu-trigger[aria-expanded="true"] { background: var(--ui-subtle); color: var(--ui-ink); }
+.aftermath-menu-trigger .evenit-icon { width: 19px; height: 19px; }
+.aftermath-menu-popover { position: absolute; z-index: 80; top: calc(100% + 6px); right: 0; width: 230px; padding: 7px; border: 1px solid var(--ui-line); border-radius: 15px; background: var(--ui-surface); box-shadow: 0 18px 44px rgba(36,28,48,.16); }
+.aftermath-menu-popover[hidden] { display: none !important; }
+.aftermath-menu-popover button { display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 8px 10px; border: 0; border-radius: 11px; background: transparent; color: var(--ui-coral); text-align: left; cursor: pointer; }
+.aftermath-menu-popover button:hover { background: var(--ui-coral-soft); }
+.aftermath-menu-popover button > span:first-child { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--ui-coral-soft); font: 700 20px/1 var(--font-ui); }
+.aftermath-menu-popover strong, .aftermath-menu-popover small { display: block; }
+.aftermath-menu-popover strong { color: var(--ui-coral); font: 700 13px/1.35 var(--font-ui); }
+.aftermath-menu-popover small { margin-top: 2px; color: var(--ui-muted); font: 500 10px/1.35 var(--font-ui); }
+.aftermath-card.is-removing { opacity: 0; transform: scale(.985); transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
+
+.insights-danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; padding: 20px; border: 1px solid color-mix(in srgb,var(--ui-coral) 34%,var(--ui-line)); border-radius: 15px; background: var(--ui-coral-soft); }
+.insights-danger-zone h3 { margin: 4px 0 5px; color: var(--ui-ink); font: 700 17px/1.25 var(--font-ui); }
+.insights-danger-zone p { max-width: 620px; margin: 0; color: var(--ui-muted); font: 500 12px/1.55 var(--font-ui); }
+.insights-danger-zone .approval-eyebrow { color: var(--ui-coral); }
+.insights-danger-zone > button { flex: 0 0 auto; min-height: 43px; padding: 0 17px; border: 1px solid var(--ui-coral); border-radius: 12px; background: var(--ui-surface); color: var(--ui-coral); font: 700 12px/1 var(--font-ui); cursor: pointer; }
+.insights-danger-zone > button:hover { background: var(--ui-coral); color: #fff; }
+.insights-danger-zone > button:disabled { opacity: .64; cursor: wait; }
+
+.destructive-confirmation { position: fixed; z-index: 5000; inset: 0; display: grid; place-items: center; padding: 22px; background: rgba(20,16,25,.45); opacity: 0; backdrop-filter: blur(10px); transition: opacity .15s ease; }
+.destructive-confirmation.is-open { opacity: 1; }
+.destructive-confirmation.is-closing { opacity: 0; }
+.destructive-confirmation-card { width: min(420px,100%); padding: 28px; border: 1px solid var(--ui-line); border-radius: 22px; background: var(--ui-surface); box-shadow: 0 28px 80px rgba(18,12,25,.3); transform: translateY(8px) scale(.985); transition: transform .15s ease; }
+.destructive-confirmation.is-open .destructive-confirmation-card { transform: translateY(0) scale(1); }
+.destructive-confirmation-mark { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 18px; border-radius: 15px; background: var(--ui-coral-soft); color: var(--ui-coral); font: 800 24px/1 var(--font-ui); }
+.destructive-confirmation-card h2 { margin: 5px 0 9px; color: var(--ui-ink); font: 750 26px/1.15 var(--font-ui); letter-spacing: -.035em; }
+.destructive-confirmation-card > p:not(.overline) { margin: 0; color: var(--ui-muted); font: 500 13px/1.6 var(--font-ui); }
+.destructive-confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.destructive-confirmation-actions button { min-height: 46px; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--ui-subtle); color: var(--ui-ink); font: 700 13px/1 var(--font-ui); cursor: pointer; }
+.destructive-confirmation-actions .confirm-delete { border-color: var(--ui-coral); background: var(--ui-coral); color: #fff; }
+
 /* A deliberate dark palette: plum-black canvas, raised charcoal surfaces,
    purple actions, teal status, and coral warnings. Every high-use surface
    inherits these tokens so isolated white or black patches do not appear. */
@@ -553,7 +590,7 @@ html[data-evenit-theme="dark"] {
   --ui-shadow: 0 10px 34px rgba(0,0,0,.24);
 }
 html[data-evenit-theme="dark"] :is(.feed-area,.page-view,.right-rail,.feed-top,.mobile-header,.mobile-search-panel,.workspace-shell,.aftermath-page-view) { background: var(--ui-bg) !important; color: var(--ui-ink) !important; }
-html[data-evenit-theme="dark"] :is(.post,.home-event-card,.aftermath-card,.following-card,.profile-event,.public-plan-card,.public-profile-about,.profile-empty,.lived-empty,.message,.group-members-panel,.settings-card,.settings-group,.saved-card,.request-form-section,.request-verification-section,.request-scene,.request-review-section,.request-review-profile,.insights-section,.insights-metric,.scan-page-surface,.scan-modal,.scan-fallback,.modal,.login-modal,.sheet,.entry-pass-modal,.entry-verification-modal,.workspace-surface,.aftermath-page-surface,.discover-event-result,.discover-profile-result,.discover-result-empty) { background: var(--ui-surface) !important; border-color: var(--ui-line) !important; color: var(--ui-ink) !important; }
+html[data-evenit-theme="dark"] :is(.post,.home-event-card,.aftermath-card,.following-card,.profile-event,.public-plan-card,.public-profile-about,.profile-empty,.lived-empty,.message,.group-members-panel,.settings-card,.settings-group,.saved-card,.request-form-section,.request-verification-section,.request-scene,.request-review-section,.request-review-profile,.insights-section,.insights-metric,.scan-page-surface,.scan-modal,.scan-fallback,.modal,.login-modal,.sheet,.entry-pass-modal,.entry-verification-modal,.workspace-surface,.aftermath-page-surface,.discover-event-result,.discover-profile-result,.discover-result-empty,.aftermath-menu-popover,.destructive-confirmation-card) { background: var(--ui-surface) !important; border-color: var(--ui-line) !important; color: var(--ui-ink) !important; }
 html[data-evenit-theme="dark"] :is(.profile-tabs,.public-profile-tabs,.group-thread,.aftermath-event-context,.request-answers,.review-detail-list div,.scan-page-note,.share-url,.topbar-search,.search-box,.comment-form input,.mobile-search-panel label) { background: var(--ui-subtle) !important; border-color: var(--ui-line) !important; color: var(--ui-ink) !important; }
 html[data-evenit-theme="dark"] :is(input,textarea,select):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]) { background-color: var(--ui-subtle) !important; border-color: var(--ui-line) !important; color: var(--ui-ink) !important; }
 html[data-evenit-theme="dark"] :is(input,textarea)::placeholder { color: #91889d !important; }
@@ -578,4 +615,9 @@ html[data-evenit-theme="dark"] :is(.profile-login-button,.share-profile,.message
   .discover-event-art, .discover-profile-result > img { width: 52px; height: 52px; }
   .discover-result-copy em { display: none; }
   .profile-menu-panel { position: fixed !important; top: auto !important; right: 12px !important; bottom: calc(94px + env(safe-area-inset-bottom)) !important; left: 12px !important; width: auto !important; max-height: calc(100dvh - 126px) !important; border-radius: 18px !important; }
+  .insights-danger-zone { align-items: stretch; flex-direction: column; gap: 14px; }
+  .insights-danger-zone > button { width: 100%; }
+  .aftermath-menu-popover { position: fixed; top: auto; right: 14px; bottom: calc(92px + env(safe-area-inset-bottom)); left: 14px; width: auto; }
+  .destructive-confirmation { align-items: end; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .destructive-confirmation-card { padding: 24px 20px 20px; border-radius: 22px; }
 }
