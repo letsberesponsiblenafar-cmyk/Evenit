@@ -146,6 +146,7 @@
   window.addEventListener('popstate',event=>{
     const route=event.state?.[stateKey]&&event.state.route||routeFromHash();
     if(event.state?.evenitAppView){currentRoute=snapshot(route);transition++;return;}
+    window.evenitRestoreAftermathSurface?.();
     renderRoute(route);
   });
 
@@ -168,7 +169,7 @@
     if(tab){pushRoute(pageRoute('profile',profileTabName(tab)));return}
 
     const nav=event.target.closest('[data-page]');
-    if(nav){event.preventDefault();closeMobileMenu();pushRoute(pageRoute(nav.dataset.page));return}
+    if(nav){event.preventDefault();window.evenitRestoreAftermathSurface?.();closeMobileMenu();pushRoute(pageRoute(nav.dataset.page));return}
 
     const discoverLink=event.target.closest('.rail-heading a');
     if(discoverLink){event.preventDefault();closeMobileMenu();pushRoute(pageRoute('discover'));}

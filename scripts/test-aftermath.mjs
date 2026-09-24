@@ -29,5 +29,9 @@ test('authored paragraphs and attachment previews are preserved',()=>{
   assert.match(html,/id="aftermath-file-list" class="aftermath-file-preview"/);
   assert.match(app,/URL\.createObjectURL\(file\)/);
   assert.match(app,/aftermathDraftFiles\.length<10/);
-  assert.match(app,/else if\(overlay\.id==='aftermath-modal'\)closeAftermathComposer\(\)/);
+  assert.match(app,/function mountAftermathPage\(/);
+  assert.match(app,/type:'aftermath-page'/);
+  assert.match(app,/window\.history\.back\(\)/);
+  assert.match(css,/\.aftermath-composer\.aftermath-page-surface/);
+  assert.doesNotMatch(app,/else if\(overlay\.id==='aftermath-modal'\)closeAftermathComposer\(\)/);
 });

@@ -1030,7 +1030,7 @@ if(supabase){
 }else{updateAccountUI();loadPlans();loadAftermathFeed();window.evenitSharedLinks?.setAuth(null);}
 const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#open-modal-header')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#open-modal-mobile')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
 const loginModal=document.querySelector('#login-modal');const openLogin=()=>loginModal.classList.add('open');document.querySelector('#open-login')?.addEventListener('click',openLogin);document.querySelector('#open-login-mobile')?.addEventListener('click',openLogin);document.querySelector('#close-login').onclick=()=>loginModal.classList.remove('open');loginModal.onclick=e=>{if(e.target===loginModal)loginModal.classList.remove('open')};document.querySelector('#login-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signInWithPassword({email:data.get('email'),password:data.get('password')});if(error){showToast(error.message);return}currentUser=result.user;updateAccountUI();refreshProfileAfterAuth();loginModal.classList.remove('open');showToast('Welcome back to Evenit ✦')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};
-const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo:window.location.href,data:{username:data.get('username'),full_name:data.get('full_name'),profile_onboarding:true}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;if(currentUser)sessionStorage.setItem('evenit-profile-onboarding','1');updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created — add a little about yourself next.':'Check your email to verify your profile, then log in ✦');setPage('profile')};
+const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const emailRedirectTo=new URL('auth-callback.html',document.baseURI).href;const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo,data:{username:data.get('username'),full_name:data.get('full_name'),profile_onboarding:true}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;if(currentUser)sessionStorage.setItem('evenit-profile-onboarding','1');updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created — add a little about yourself next.':'Check your email to verify your profile, then log in ✦');setPage('profile')};
 document.querySelector('#post-form').onsubmit=async e=>{e.preventDefault();const form=e.target;const data=new FormData(form);const publishButton=form.querySelector('[type="submit"]');if(!supabase){showToast('Connection setup is unavailable. Reopen the app while online.');return}if(!navigator.onLine){showToast('You are offline. Connect to Wi-Fi or mobile data, then try again.');return}const {data:sessionData,error:sessionError}=await supabase.auth.getSession();const liveUser=sessionData?.session?.user;if(sessionError||!liveUser){currentUser=null;updateAccountUI();showToast('Your login expired. Please log in again before publishing.');loginModal.classList.add('open');return}currentUser=liveUser;const capacityValue=String(data.get('capacity')||'').trim();const capacity=capacityValue?Number(capacityValue):null;if(capacity!==null&&(!Number.isInteger(capacity)||capacity<1)){showToast('Attendance limit must be a whole number greater than zero');return}const startsValue=String(data.get('when')||'').trim();const startsAt=startsValue?new Date(startsValue):null;if(!startsAt||Number.isNaN(startsAt.getTime())){showToast('Choose a valid date and time for the event.');return}publishButton.disabled=true;publishButton.textContent='Publishing…';try{let {data:profile,error:profileError}=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();if(profileError)throw profileError;if(!profile){const metadata=currentUser.user_metadata||{};const {error:createProfileError}=await supabase.from('profiles').upsert({id:currentUser.id,username:metadata.username||currentUser.email.split('@')[0],full_name:metadata.full_name||null});if(createProfileError)throw new Error('Your profile needs to finish syncing: '+createProfileError.message);const result=await supabase.from('profiles').select('neighborhood,latitude,longitude').eq('id',currentUser.id).maybeSingle();profile=result.data}const {data:plan,error}=await supabase.from('plans').insert({user_id:currentUser.id,title:String(data.get('title')).trim(),location:String(data.get('where')).trim(),starts_at:startsAt.toISOString(),caption:String(data.get('caption')||'').trim()||null,category:data.get('category'),capacity,neighborhood:profile?.neighborhood||null,requires_college_verification:data.get('requires_college_verification')==='on'}).select('id').single();if(error)throw error;if(profile?.latitude!==null&&profile?.latitude!==undefined&&profile?.longitude!==null&&profile?.longitude!==undefined){const {error:locationError}=await supabase.from('plan_locations').upsert({plan_id:plan.id,latitude:profile.latitude,longitude:profile.longitude,updated_at:new Date().toISOString()});if(locationError)showToast('Plan published; nearby-distance matching is still syncing.')}const passMemo=String(data.get('pass_memo')||'').trim();if(passMemo){const {error:passError}=await supabase.from('plan_passes').upsert({plan_id:plan.id,memo:passMemo,updated_at:new Date().toISOString()});if(passError)showToast('Plan published; the entry note could not be saved.')}modal.classList.remove('open');form.reset();await loadPlans();showToast('Your plan is live on Evenit ✦')}catch(error){console.error('Plan publish failed',error);showToast(`Could not publish: ${error?.message||'Please try again.'}`)}finally{publishButton.disabled=false;publishButton.innerHTML='Create plan <span>→</span>'}};
 function showToast(message){const toast=document.querySelector('#toast');toast.textContent=message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2400)}
 function withEvenitTimeout(promise,ms,message){let timeout;return Promise.race([promise,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error(message)),ms)})]).finally(()=>clearTimeout(timeout))}
@@ -2048,6 +2048,48 @@ async function renderLivedOn(container){
 let activeAftermathPlanId=null;
 let aftermathDraftFiles=[];
 let aftermathPreviewUrls=[];
+let activeAftermathPage=false;
+let activeAftermathEvents=[];
+
+function restoreAftermathSurface(){
+  const surface=document.querySelector('.aftermath-composer');
+  const host=document.querySelector('#aftermath-modal');
+  if(surface&&host&&!host.contains(surface))host.append(surface);
+  surface?.classList.remove('aftermath-page-surface');
+  surface?.setAttribute('role','dialog');
+  surface?.setAttribute('aria-modal','true');
+  host?.classList.remove('open');
+  pageView?.classList.remove('aftermath-page-view');
+  document.body.classList.remove('aftermath-page-open');
+  activeAftermathPage=false;
+}
+function finalizeAftermathPage(){
+  restoreAftermathSurface();
+  activeAftermathPlanId=null;
+  activeAftermathEvents=[];
+  resetAftermathComposer();
+}
+window.evenitRestoreAftermathSurface=finalizeAftermathPage;
+
+function mountAftermathPage({restore=false,view}={}){
+  const surface=document.querySelector('.aftermath-composer');
+  if(!surface)return false;
+  if(!restore)pushAppView(view||{type:'aftermath-page',mode:'compose',planId:activeAftermathPlanId});
+  activeAftermathPage=true;
+  homeElements.forEach(element=>element.hidden=true);
+  pageView.hidden=false;
+  pageView.className='page-view aftermath-page-view';
+  document.querySelectorAll('[data-page]').forEach(link=>link.classList.remove('active'));
+  updateMobileHeader('profile');
+  document.body.classList.add('aftermath-page-open');
+  pageView.innerHTML='<main class="aftermath-page-shell"><div class="aftermath-page-mount"></div></main>';
+  surface.classList.add('aftermath-page-surface');
+  surface.removeAttribute('role');
+  surface.removeAttribute('aria-modal');
+  pageView.querySelector('.aftermath-page-mount')?.append(surface);
+  window.scrollTo({top:0,behavior:restore?'auto':'smooth'});
+  return true;
+}
 function clearAftermathPreviewUrls(){
   aftermathPreviewUrls.forEach(url=>URL.revokeObjectURL(url));
   aftermathPreviewUrls=[];
@@ -2095,34 +2137,36 @@ function setAftermathPlanSummary(planId,context={}){
   summary.querySelector('strong').textContent=plan.title||'Selected event';
   summary.querySelector('small').textContent=[plan.location,plan.starts_at?formatDateTime(plan.starts_at):''].filter(Boolean).join(' · ')||'Your checked-in event';
 }
-function openAftermathComposer(planId,context={}){
+function openAftermathComposer(planId,context={},options={}){
   activeAftermathPlanId=planId;
-  const m=document.querySelector('#aftermath-modal');
+  const m=document.querySelector('.aftermath-composer');
   if(m){
     m.querySelector('#aftermath-plan-picker').hidden=true;
     m.querySelector('#aftermath-form').hidden=false;
-    m.classList.add('open');
     m.querySelector('#aftermath-status').textContent='';
     m.querySelector('#aftermath-body').value='';
     m.querySelector('#aftermath-tags').value='';
     resetAftermathComposer();
     setAftermathPlanSummary(planId,context);
+    if(!activeAftermathPage)mountAftermathPage({restore:options.restore,view:{type:'aftermath-page',mode:'compose',planId,context}});
+    else if(!options.restore&&window.history.state?.evenitAppView?.type==='aftermath-page')window.history.replaceState({...window.history.state,evenitAppView:{type:'aftermath-page',mode:'compose',planId,context}},'',window.location.href);
     setTimeout(()=>m.querySelector('#aftermath-body')?.focus(),80);
   }
 }
-function openAftermathPlanPicker(events){
+function openAftermathPlanPicker(events,routeOptions={}){
   const available=(events||[]).filter(event=>event?.plan_id);
   if(!available.length){showToast('There are no lived events ready to share yet.');return;}
-  if(available.length===1){openAftermathComposer(available[0].plan_id,available[0]);return;}
+  activeAftermathEvents=available;
+  if(available.length===1){openAftermathComposer(available[0].plan_id,available[0],routeOptions);return;}
   const modal=document.querySelector('#aftermath-modal');
   const picker=document.querySelector('#aftermath-plan-picker');
-  const options=document.querySelector('#aftermath-plan-options');
-  if(!modal||!picker||!options)return;
-  options.innerHTML=available.map(event=>`<button class="aftermath-plan-option" type="button" data-aftermath-plan="${escapeHtml(event.plan_id)}"><span><strong>${escapeHtml(event.title||'Untitled event')}</strong><small>${escapeHtml(event.location||'Location to be announced')} · ${escapeHtml(formatDateTime(event.starts_at))}</small></span><b>›</b></button>`).join('');
+  const list=document.querySelector('#aftermath-plan-options');
+  if(!modal||!picker||!list)return;
+  list.innerHTML=available.map(event=>`<button class="aftermath-plan-option" type="button" data-aftermath-plan="${escapeHtml(event.plan_id)}"><span><strong>${escapeHtml(event.title||'Untitled event')}</strong><small>${escapeHtml(event.location||'Location to be announced')} · ${escapeHtml(formatDateTime(event.starts_at))}</small></span><b>Choose</b></button>`).join('');
   picker.hidden=false;
   modal.querySelector('#aftermath-form').hidden=true;
-  modal.classList.add('open');
-  options.querySelectorAll('[data-aftermath-plan]').forEach(button=>button.onclick=()=>openAftermathComposer(button.dataset.aftermathPlan,available.find(event=>event.plan_id===button.dataset.aftermathPlan)||{}));
+  if(!activeAftermathPage)mountAftermathPage({restore:routeOptions.restore,view:{type:'aftermath-page',mode:'picker',events:available}});
+  list.querySelectorAll('[data-aftermath-plan]').forEach(button=>button.onclick=()=>openAftermathComposer(button.dataset.aftermathPlan,available.find(event=>event.plan_id===button.dataset.aftermathPlan)||{}));
 }
 async function submitAftermath(e){
   e.preventDefault();
@@ -2156,11 +2200,7 @@ async function submitAftermath(e){
     }
     status.textContent=failedUploads?`Shared · ${failedUploads} ${failedUploads===1?'file':'files'} could not upload`:'Shared ✓';
     showToast(failedUploads?'Aftermath shared with some media missing':'Aftermath shared');
-    setTimeout(()=>{
-      closeAftermathComposer();
-      const tab=[...document.querySelectorAll('.profile-tabs button')].find(button=>button.textContent.includes('Lived'));
-      if(tab)renderProfileTab(tab);
-    },700);
+    setTimeout(()=>closeAftermathComposer(),700);
   }catch(error){
     status.textContent=error.message||'Could not share this aftermath.';
     showToast(error.message||'Could not share this aftermath.');
@@ -2169,12 +2209,13 @@ async function submitAftermath(e){
   }
 }
 function closeAftermathComposer(){
-  document.querySelector('#aftermath-modal')?.classList.remove('open');
-  activeAftermathPlanId=null;
-  resetAftermathComposer();
+  if(activeAftermathPage&&window.history.state?.evenitAppView?.type==='aftermath-page'){
+    window.history.back();
+    return;
+  }
+  finalizeAftermathPage();
 }
 document.querySelector('#close-aftermath-modal')?.addEventListener('click',closeAftermathComposer);
-document.querySelector('#aftermath-modal')?.addEventListener('click',e=>{if(e.target.id==='aftermath-modal')closeAftermathComposer();});
 document.querySelector('#aftermath-form')?.addEventListener('submit', submitAftermath);
 document.querySelector('#aftermath-files')?.addEventListener('change', e=>{
   const incoming=[...e.target.files];
@@ -2364,20 +2405,94 @@ document.querySelector('#mobile-header-action')?.addEventListener('click',()=>{
   setPage('notifications');
 });
 document.querySelector('#mobile-search-input')?.addEventListener('input',event=>{
-  const query=event.target.value.trim().toLowerCase();
-  document.querySelectorAll('#following-events .following-card,#discover-aftermath-feed .aftermath-card').forEach(card=>{card.hidden=Boolean(query)&&!card.textContent.toLowerCase().includes(query)});
+  const query=event.target.value.trim();
+  const discoverInput=document.querySelector('#discover-search');
+  if(discoverInput){discoverInput.value=query;queueDiscoverSearch(query);return;}
+  document.querySelectorAll('#following-events .following-card,#discover-aftermath-feed .aftermath-card').forEach(card=>{card.hidden=Boolean(query)&&!card.textContent.toLowerCase().includes(query.toLowerCase())});
 });
 updateMobileHeader();
 
-// Discover is the aftermath space. Upcoming events and the swipe mechanism
-// belong exclusively to Home, so they are not repeated here.
+// Discover stays an aftermath feed until someone searches. Search then expands
+// into three clearly separated result groups: events, people, and moments.
 const renderAftermathOnlyDiscover=renderDiscover;
+let discoverSearchTimer=0;
+let discoverSearchRequest=0;
+
+function discoverResultHeading(label,count){
+  return `<header class="discover-result-heading"><div><span>${escapeHtml(label)}</span><strong>${count}</strong></div></header>`;
+}
+
+function renderDiscoverEventResults(items=[]){
+  if(!items.length)return '<div class="discover-result-empty">No matching events.</div>';
+  return `<div class="discover-event-results">${items.map(item=>`<button class="discover-event-result" type="button" data-discover-event="${escapeHtml(item.id)}">
+    <span class="discover-event-art ${item.image_url?'has-image':''}" data-cover-style="${escapeHtml(item.cover_style||'aurora')}">${item.image_url?`<img src="${escapeHtml(item.image_url)}" alt="">`:`<b>${escapeHtml((item.category||'Event').slice(0,2).toUpperCase())}</b>`}</span>
+    <span class="discover-result-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml([item.category,item.location].filter(Boolean).join(' · '))}</small><em>${escapeHtml(item.tagline||item.caption||'Open event details')}</em></span>
+    <span class="discover-result-action">View</span>
+  </button>`).join('')}</div>`;
+}
+
+function renderDiscoverProfileResults(items=[]){
+  if(!items.length)return '<div class="discover-result-empty">No matching profiles.</div>';
+  return `<div class="discover-profile-results">${items.map(item=>`<button class="discover-profile-result" type="button" data-public-profile-id="${escapeHtml(item.id)}">
+    <img src="${escapeHtml(item.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt="">
+    <span class="discover-result-copy"><strong>${escapeHtml(item.full_name||item.username||'Evenit member')}</strong><small>@${escapeHtml(item.username||'member')}${item.neighborhood?` · ${escapeHtml(item.neighborhood)}`:''}</small><em>${escapeHtml(item.about||'View profile')}</em></span>
+    <span class="discover-result-action">Profile</span>
+  </button>`).join('')}</div>`;
+}
+
+function renderDiscoverSearchResults(query,result){
+  const target=document.querySelector('#discover-results');
+  if(!target)return;
+  const events=Array.isArray(result?.events)?result.events:[];
+  const profiles=Array.isArray(result?.profiles)?result.profiles:[];
+  const aftermath=Array.isArray(result?.aftermath)?result.aftermath:[];
+  const total=events.length+profiles.length+aftermath.length;
+  target.innerHTML=`<div class="discover-search-summary"><p>Results for</p><h2>“${escapeHtml(query)}”</h2><span>${total} ${total===1?'match':'matches'}</span></div>
+    <section class="discover-result-group">${discoverResultHeading('Events',events.length)}${renderDiscoverEventResults(events)}</section>
+    <section class="discover-result-group">${discoverResultHeading('Profiles',profiles.length)}${renderDiscoverProfileResults(profiles)}</section>
+    <section class="discover-result-group discover-aftermath-results">${discoverResultHeading('Aftermath',aftermath.length)}${aftermath.length?renderAftermathCards(aftermath):'<div class="discover-result-empty">No matching aftermath.</div>'}</section>`;
+  target.querySelectorAll('[data-discover-event]').forEach(button=>button.addEventListener('click',()=>openPublicEventDetails(button.dataset.discoverEvent)));
+  wireAftermathActions();
+}
+
+async function runDiscoverSearch(query){
+  const feed=document.querySelector('#discover-default');
+  const results=document.querySelector('#discover-results');
+  const normalized=String(query||'').trim();
+  const request=++discoverSearchRequest;
+  if(!normalized){
+    if(results){results.hidden=true;results.innerHTML='';}
+    if(feed)feed.hidden=false;
+    return;
+  }
+  if(feed)feed.hidden=true;
+  if(results){results.hidden=false;results.innerHTML='<div class="discover-search-loading"><span></span><p>Searching events, profiles, and aftermath…</p></div>';}
+  if(!supabase){if(results)results.innerHTML='<div class="discover-result-empty">Search is unavailable while the app is offline.</div>';return;}
+  const {data,error}=await supabase.rpc('search_discover',{p_query:normalized,p_limit:12});
+  if(request!==discoverSearchRequest)return;
+  if(error){
+    if(results)results.innerHTML='<div class="discover-result-empty">Search could not load. Please try again.</div>';
+    return;
+  }
+  const parsed=typeof data==='string'?JSON.parse(data):data||{};
+  parsed.aftermath=await attachAftermathMedia(parsed.aftermath||[]);
+  if(request!==discoverSearchRequest)return;
+  renderDiscoverSearchResults(normalized,parsed);
+}
+
+function queueDiscoverSearch(query){
+  clearTimeout(discoverSearchTimer);
+  discoverSearchTimer=setTimeout(()=>runDiscoverSearch(query),180);
+}
+
 renderDiscover=function(){
-  pageView.innerHTML=`<div class="page-topbar discover-topbar"><label class="topbar-search">${icon('search')}<input id="discover-search" aria-label="Search aftermath, people, places" placeholder="Search aftermath, people, places"></label></div><section class="discover-aftermath"><div class="discover-section-heading"><h3>Aftermath</h3></div><div id="discover-aftermath-feed"></div></section>`;
+  pageView.innerHTML=`<div class="page-topbar discover-topbar"><label class="topbar-search">${icon('search')}<input id="discover-search" aria-label="Search events, profiles, and aftermath" placeholder="Search events, profiles, and aftermath" autocomplete="off"></label></div><section id="discover-default" class="discover-aftermath"><div class="discover-section-heading"><h3>Aftermath</h3></div><div id="discover-aftermath-feed"></div></section><section id="discover-results" class="discover-results" aria-live="polite" hidden></section>`;
   loadAftermathFeed(document.querySelector('#discover-aftermath-feed'));
   document.querySelector('#discover-search')?.addEventListener('input',event=>{
-    const query=event.target.value.trim().toLowerCase();
-    document.querySelectorAll('#discover-aftermath-feed .aftermath-card').forEach(card=>{card.hidden=Boolean(query)&&!card.textContent.toLowerCase().includes(query)});
+    const query=event.target.value;
+    const mobile=document.querySelector('#mobile-search-input');
+    if(mobile&&mobile.value!==query)mobile.value=query;
+    queueDiscoverSearch(query);
   });
   applyAdminContent();applyAdminStyles();
 };
@@ -3119,6 +3234,12 @@ document.addEventListener('click',event=>{
 
 window.addEventListener('popstate',event=>{
   const workspace=event.state?.evenitAppView;
+  if(workspace?.type==='aftermath-page'){
+    if(workspace.mode==='picker')openAftermathPlanPicker(workspace.events||activeAftermathEvents,{restore:true});
+    else openAftermathComposer(workspace.planId,workspace.context||{}, {restore:true});
+    return;
+  }
+  if(activeAftermathPage)finalizeAftermathPage();
   if(workspace?.type==='workspace'){openWorkspace(workspace.kind,{restore:true});return;}
   if(activeWorkspace)closeWorkspace();
 });
@@ -3250,16 +3371,18 @@ function toggleProfileMenu(trigger){
   panel.className='profile-menu-panel';
   panel.setAttribute('role','menu');
   panel.innerHTML=`
-    <button type="button" role="menuitem" data-profile-menu-action="settings"><span>${icon('settings')}</span>Settings</button>
-    <button type="button" role="menuitem" data-profile-menu-action="saved"><span>${icon('bookmark')}</span>Saved</button>
+    <div class="profile-menu-heading"><span>Profile menu</span><small>Account, saved items, and appearance</small></div>
+    <button type="button" role="menuitem" data-profile-menu-action="settings"><span class="profile-menu-icon">${icon('settings')}</span><span class="profile-menu-copy"><strong>Settings</strong><small>Account, privacy, and notifications</small></span><b aria-hidden="true">›</b></button>
+    <button type="button" role="menuitem" data-profile-menu-action="saved"><span class="profile-menu-icon">${icon('bookmark')}</span><span class="profile-menu-copy"><strong>Saved</strong><small>Events, people, and groups</small></span><b aria-hidden="true">›</b></button>
     <div class="profile-menu-label">Appearance</div>
-    <button type="button" role="menuitem" data-profile-menu-action="theme-light" aria-pressed="false"><span>${icon('sun')}</span>Light mode</button>
-    <button type="button" role="menuitem" data-profile-menu-action="theme-dark" aria-pressed="false"><span>${icon('moon')}</span>Dark mode</button>
-    <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span>${icon('download')}</span>Download Android app</a>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-light" aria-pressed="false"><span class="profile-menu-icon">${icon('sun')}</span><span class="profile-menu-copy"><strong>Light mode</strong><small>Bright and calm</small></span><b class="profile-menu-check" aria-hidden="true"></b></button>
+    <button type="button" role="menuitem" data-profile-menu-action="theme-dark" aria-pressed="false"><span class="profile-menu-icon">${icon('moon')}</span><span class="profile-menu-copy"><strong>Dark mode</strong><small>Low-light plum palette</small></span><b class="profile-menu-check" aria-hidden="true"></b></button>
+    <a role="menuitem" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span class="profile-menu-icon">${icon('download')}</span><span class="profile-menu-copy"><strong>Android app</strong><small>Download the latest APK</small></span><b aria-hidden="true">↗</b></a>
     <div class="profile-menu-divider"></div>
-    <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span>${icon('logout')}</span>${signedIn?'Log out':'Log in'}</button>`;
+    <button type="button" role="menuitem" class="profile-menu-account" data-profile-menu-action="${signedIn?'logout':'login'}"><span class="profile-menu-icon">${icon('logout')}</span><span class="profile-menu-copy"><strong>${signedIn?'Log out':'Log in'}</strong><small>${signedIn?'End this session safely':'Continue to your profile'}</small></span><b aria-hidden="true">›</b></button>`;
   trigger.parentElement?.append(panel);
   trigger.setAttribute('aria-expanded','true');
+  applyEvenitTheme(document.documentElement.dataset.evenitTheme||'light');
   panel.querySelectorAll('[data-profile-menu-action]').forEach(button=>button.addEventListener('click',async()=>{
     const action=button.dataset.profileMenuAction;
     if(action==='theme-light'||action==='theme-dark'){applyEvenitTheme(action.replace('theme-',''));closeProfileMenu();showToast(`${action==='theme-dark'?'Dark':'Light'} mode enabled`);return;}
@@ -3410,6 +3533,11 @@ window.setPage=(page)=>setPage(page);
 window.addEventListener('evenit:native-back',()=>{
   if(document.querySelector('#profile-menu-panel')){closeProfileMenu();return;}
   if(entryVerificationModal?.classList.contains('open')){entryVerificationModal.classList.remove('open');return;}
+  if(activeAftermathPage){
+    if(window.history.state?.evenitAppView?.type==='aftermath-page')window.history.back();
+    else closeAftermathComposer();
+    return;
+  }
   if(activeWorkspace){
     if(window.history.state?.evenitAppView?.type==='workspace')window.history.back();
     else closeWorkspace();
@@ -3420,7 +3548,6 @@ window.addEventListener('evenit:native-back',()=>{
   const overlay=document.querySelector('.scan-backdrop.open,.sheet-backdrop.open,.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open');
   if(overlay){
     if(overlay===scanModal)closeScanModal();
-    else if(overlay.id==='aftermath-modal')closeAftermathComposer();
     else overlay.classList.remove('open');
     return;
   }
