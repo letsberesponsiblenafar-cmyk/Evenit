@@ -40,7 +40,8 @@ test('dark mode defines one full semantic palette for application surfaces',()=>
 });
 
 test('signup uses a stable callback that shows successful and unsuccessful states',()=>{
-  assert.match(app,/new URL\('auth-callback\.html',document\.baseURI\)\.href/);
+  assert.match(app,/EVENIT_PUBLIC_ORIGIN='https:\/\/evenit\.vercel\.app'/);
+  assert.match(app,/emailRedirectTo=`\$\{EVENIT_PUBLIC_ORIGIN\}\/auth-callback\.html`/);
   assert.match(callback,/Email verified/);
   assert.match(callback,/Verification unsuccessful/);
   assert.match(callback,/exchangeCodeForSession/);
