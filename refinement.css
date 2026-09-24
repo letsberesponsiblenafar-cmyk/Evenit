@@ -446,3 +446,13 @@ html[data-evenit-theme="dark"] .scan-reader { background: #101012 !important; }
 @media(prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Context shown only when a person opens a shared URL while signed out. */
+.shared-login-context { display: flex; align-items: center; gap: 12px; margin: 15px 0 18px; padding: 13px 14px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-primary-soft); color: var(--ui-primary); }
+.shared-login-context[hidden] { display: none !important; }
+.shared-login-context > span { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; background: var(--ui-surface); }
+.shared-login-context .evenit-icon { width: 19px; height: 19px; }
+.shared-login-context strong,
+.shared-login-context small { display: block; }
+.shared-login-context strong { color: var(--ui-ink); font: 700 13px/1.35 var(--font-ui); }
+.shared-login-context small { margin-top: 3px; color: var(--ui-muted); font: 500 11px/1.45 var(--font-ui); }

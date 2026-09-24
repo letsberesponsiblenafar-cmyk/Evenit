@@ -53,6 +53,7 @@
     route=snapshot(route);
     const storedRoute=window.history.state?.route;
     if(sameRoute(route,storedRoute||currentRoute)&&!window.history.state?.evenitAppView)return;
+    if(route.kind==='page')window.evenitSharedLinks?.clearPending();
     transition++;
     currentRoute=route;
     window.history.pushState(appState(route),'',routeUrl(route));
@@ -100,12 +101,14 @@
     if(!route){if(done)done();return}
     if(route.kind==='page'){activatePage(route,done);return}
     if(route.kind==='public-event'){
-      if(typeof window.openEvenitPublicEvent==='function')window.openEvenitPublicEvent(route.planId,{restore:true});
+      if(window.evenitSharedLinks)window.evenitSharedLinks.open({kind:'event',id:route.planId});
+      else if(typeof window.openEvenitPublicEvent==='function')window.openEvenitPublicEvent(route.planId,{restore:true});
       if(done)setTimeout(done,0);
       return;
     }
     if(route.kind==='public-profile'){
-      if(typeof window.openEvenitPublicProfile==='function')window.openEvenitPublicProfile(route.profileId,{restore:true});
+      if(window.evenitSharedLinks)window.evenitSharedLinks.open({kind:'profile',id:route.profileId});
+      else if(typeof window.openEvenitPublicProfile==='function')window.openEvenitPublicProfile(route.profileId,{restore:true});
       if(done)setTimeout(done,0);
       return;
     }

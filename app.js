@@ -642,6 +642,8 @@ postsEl.querySelectorAll('.post-actions .save[data-index]').forEach(btn=>{
 
 let activeEvenitShare=null;
 function evenitShareUrl(type,id){
+  const canonical=window.evenitSharedLinks?.canonicalUrl(type,id);
+  if(canonical)return canonical;
   const url=new URL(window.location.href);
   url.search='';
   url.hash=type==='profile'?`public-profile/${encodeURIComponent(id)}`:`event/${encodeURIComponent(id)}`;
@@ -1023,9 +1025,9 @@ function refreshProfileAfterAuth(){
   if(profileIsOpen&&!isPublicProfileOpen()&&!document.body.classList.contains('workspace-open'))renderProfile();
 }
 if(supabase){
-  supabase.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;updateAccountUI();refreshProfileAfterAuth();loadPlans();loadAftermathFeed();});
-  supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAccountUI();refreshProfileAfterAuth();loadAftermathFeed();});
-}else{updateAccountUI();loadPlans();loadAftermathFeed();}
+  supabase.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;updateAccountUI();refreshProfileAfterAuth();loadPlans();loadAftermathFeed();window.evenitSharedLinks?.setAuth(currentUser);});
+  supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAccountUI();refreshProfileAfterAuth();loadAftermathFeed();window.evenitSharedLinks?.setAuth(currentUser);});
+}else{updateAccountUI();loadPlans();loadAftermathFeed();window.evenitSharedLinks?.setAuth(null);}
 const modal=document.querySelector('#modal');document.querySelector('#open-modal').onclick=()=>modal.classList.add('open');document.querySelector('#open-modal-header')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#open-modal-mobile')?.addEventListener('click',()=>modal.classList.add('open'));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
 const loginModal=document.querySelector('#login-modal');const openLogin=()=>loginModal.classList.add('open');document.querySelector('#open-login')?.addEventListener('click',openLogin);document.querySelector('#open-login-mobile')?.addEventListener('click',openLogin);document.querySelector('#close-login').onclick=()=>loginModal.classList.remove('open');loginModal.onclick=e=>{if(e.target===loginModal)loginModal.classList.remove('open')};document.querySelector('#login-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signInWithPassword({email:data.get('email'),password:data.get('password')});if(error){showToast(error.message);return}currentUser=result.user;updateAccountUI();refreshProfileAfterAuth();loginModal.classList.remove('open');showToast('Welcome back to Evenit ✦')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};
 const signupModal=document.querySelector('#signup-modal');document.querySelector('#close-signup').onclick=()=>signupModal.classList.remove('open');signupModal.onclick=e=>{if(e.target===signupModal)signupModal.classList.remove('open')};document.querySelector('#signup-link').onclick=e=>{e.preventDefault();loginModal.classList.remove('open');signupModal.classList.add('open')};document.querySelector('#back-to-login').onclick=e=>{e.preventDefault();signupModal.classList.remove('open');loginModal.classList.add('open')};document.querySelector('#signup-form').onsubmit=async e=>{e.preventDefault();const data=new FormData(e.target);if(!supabase){showToast('Supabase is not available. Check the connection settings.');return}const {data:result,error}=await supabase.auth.signUp({email:data.get('email'),password:data.get('password'),options:{emailRedirectTo:window.location.href,data:{username:data.get('username'),full_name:data.get('full_name'),profile_onboarding:true}}});if(error){showToast(error.message);return}currentUser=result.session?result.user:null;if(currentUser)sessionStorage.setItem('evenit-profile-onboarding','1');updateAccountUI();signupModal.classList.remove('open');showToast(result.session?'Profile created — add a little about yourself next.':'Check your email to verify your profile, then log in ✦');setPage('profile')};
@@ -3350,6 +3352,35 @@ async function openPublicEventDetails(planId,fallback={},options={}){
 }
 
 window.openEvenitPublicEvent=(planId,options={})=>openPublicEventDetails(planId,{},options);
+
+function setSharedLoginContext(route){
+  const context=document.querySelector('#login-shared-context');
+  if(!context)return;
+  if(!route){context.hidden=true;return;}
+  const isProfile=route.kind==='profile';
+  context.hidden=false;
+  context.querySelector('strong').textContent=isProfile?'Open this shared profile':'Open this shared event';
+  context.querySelector('small').textContent=`Log in and we’ll take you straight to ${isProfile?'that profile':'that event'}.`;
+}
+
+window.evenitSharedLinks?.setHandlers({
+  openEvent:async planId=>{
+    if(!posts.some(post=>post.id===planId))await loadPlans();
+    return openPublicEventDetails(planId,{}, {restore:true,shared:true});
+  },
+  openProfile:profileId=>renderPublicProfile(profileId,{restore:true}),
+  requestLogin:route=>{
+    setSharedLoginContext(route);
+    loginModal?.classList.add('open');
+  },
+  clearLogin:()=>{
+    setSharedLoginContext(null);
+    loginModal?.classList.remove('open');
+  },
+  showError:(_error,route)=>{
+    showToast(`Could not open this shared ${route.kind}. Please try again.`);
+  }
+});
 
 document.addEventListener('click',event=>{
   const eventLink=event.target.closest('[data-aftermath-event]');
