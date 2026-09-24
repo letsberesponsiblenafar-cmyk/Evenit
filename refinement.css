@@ -1,8 +1,16 @@
+@font-face {
+  font-family: 'Abask';
+  src: url('assets/fonts/abask-regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 /* Evenit visual system. This layer preserves the existing routes, controls,
    hidden states and gesture behavior while giving each surface one vocabulary. */
 :root {
   --font-ui: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-brand: 'Betaline', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-brand: 'Abask', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --ui-bg: #f7f7f5;
   --ui-surface: #ffffff;
   --ui-subtle: #f1f1ef;
@@ -42,7 +50,7 @@ input::placeholder, textarea::placeholder { color: var(--ui-muted); opacity: .85
 input[type=checkbox], input[type=radio] { accent-color: var(--ui-primary); }
 :is(input, textarea, select):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]) { min-width: 0; }
 .evenit-icon { display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: middle; }
-.logo, .home-brand h1, .mobile-header .logo { font-family: var(--font-brand) !important; font-weight: 700 !important; letter-spacing: -.045em !important; color: var(--ui-primary) !important; }
+.logo, .home-brand h1, .mobile-header .logo, .topbar-brand, .feed-top::before { font-family: var(--font-brand) !important; font-weight: 400 !important; letter-spacing: -.035em !important; color: var(--ui-primary) !important; }
 .logo::first-letter { color: inherit !important; }
 :is(.page-header, .insights-header, .insights-hero, .request-page-hero, .request-review-hero, .scan-page-header, .profile-editor-hero) h2 { font-family: var(--font-ui) !important; letter-spacing: -.035em !important; line-height: 1.15 !important; }
 .overline, .approval-eyebrow, .editor-section-label { color: var(--ui-primary) !important; font-family: var(--font-ui) !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: .065em !important; }

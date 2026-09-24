@@ -1,58 +1,116 @@
 Add-Type -AssemblyName System.Drawing
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$assetRoot = Join-Path $projectRoot 'ios\App\App\Assets.xcassets'
+$fontPath = Join-Path $projectRoot 'assets\fonts\abask-regular.ttf'
+$privateFonts = New-Object System.Drawing.Text.PrivateFontCollection
+$privateFonts.AddFontFile($fontPath)
+$brandFamily = $privateFonts.Families[0]
+$purple = [System.Drawing.ColorTranslator]::FromHtml('#54259A')
+$cream = [System.Drawing.ColorTranslator]::FromHtml('#F7F4FB')
 
-function New-EvenitArtwork {
+function New-BrandArtwork {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][int]$Size,
-        [Parameter(Mandatory = $true)][double]$MarkScale
+        [Parameter(Mandatory = $true)][int]$Width,
+        [Parameter(Mandatory = $true)][int]$Height,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][double]$FontScale,
+        [switch]$Transparent,
+        [switch]$RoundBackground
     )
 
-    $bitmap = New-Object System.Drawing.Bitmap($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+    $pixelFormat = if ($Transparent) {
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+    } else {
+        [System.Drawing.Imaging.PixelFormat]::Format24bppRgb
+    }
+    $bitmap = New-Object System.Drawing.Bitmap($Width, $Height, $pixelFormat)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#54259A'))
-
-    $pathData = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $unit = ($Size / 108.0) * $MarkScale
-    $offset = ($Size - (108 * $unit)) / 2.0
-    function Point([double]$x, [double]$y) {
-        New-Object System.Drawing.PointF(($offset + $x * $unit), ($offset + $y * $unit))
+    $graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+    if ($Transparent) {
+        $graphics.Clear([System.Drawing.Color]::Transparent)
+    } else {
+        $graphics.Clear($purple)
+    }
+    if ($RoundBackground) {
+        $graphics.Clear([System.Drawing.Color]::Transparent)
+        $backgroundBrush = New-Object System.Drawing.SolidBrush($purple)
+        $graphics.FillEllipse($backgroundBrush, 0, 0, $Width, $Height)
+        $backgroundBrush.Dispose()
     }
 
-    $pathData.StartFigure()
-    $pathData.AddBezier((Point 54 28), (Point 34 28), (Point 21 42), (Point 21 58))
-    $pathData.AddBezier((Point 21 58), (Point 21 75), (Point 34 87), (Point 54 87))
-    $pathData.AddBezier((Point 54 87), (Point 67 87), (Point 78 81), (Point 85 70))
-    $pathData.AddLine((Point 85 70), (Point 74 64))
-    $pathData.AddBezier((Point 74 64), (Point 69 71), (Point 63 75), (Point 54 75))
-    $pathData.AddBezier((Point 54 75), (Point 43 75), (Point 35 69), (Point 34 60))
-    $pathData.AddLine((Point 34 60), (Point 87 60))
-    $pathData.AddBezier((Point 87 60), (Point 88 42), (Point 75 28), (Point 54 28))
-    $pathData.CloseFigure()
-    $pathData.StartFigure()
-    $pathData.AddBezier((Point 34 50), (Point 37 42), (Point 44 38), (Point 54 38))
-    $pathData.AddBezier((Point 54 38), (Point 65 38), (Point 72 43), (Point 75 50))
-    $pathData.AddLine((Point 75 50), (Point 34 50))
-    $pathData.CloseFigure()
-
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $graphics.FillPath($brush, $pathData)
+    $fontSize = [single]([Math]::Min($Width, $Height) * $FontScale)
+    $font = New-Object System.Drawing.Font($brandFamily, $fontSize, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $brush = New-Object System.Drawing.SolidBrush($cream)
+    $format = New-Object System.Drawing.StringFormat
+    $format.Alignment = [System.Drawing.StringAlignment]::Center
+    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+    $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
+    $verticalAdjustment = if ($Text -eq 'evenit') { -0.035 * $Height } else { -0.025 * $Height }
+    $rect = New-Object System.Drawing.RectangleF(0, $verticalAdjustment, $Width, $Height)
+    $graphics.DrawString($Text, $font, $brush, $rect, $format)
     $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
 
+    $format.Dispose()
     $brush.Dispose()
-    $pathData.Dispose()
+    $font.Dispose()
     $graphics.Dispose()
     $bitmap.Dispose()
 }
 
-$icon = Join-Path $assetRoot 'AppIcon.appiconset\AppIcon-512@2x.png'
-New-EvenitArtwork -Path $icon -Size 1024 -MarkScale 0.78
-
-$splashRoot = Join-Path $assetRoot 'Splash.imageset'
-@('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png') | ForEach-Object {
-    New-EvenitArtwork -Path (Join-Path $splashRoot $_) -Size 2732 -MarkScale 0.30
+function New-IconSet {
+    $webRoot = Join-Path $projectRoot 'assets\brand'
+    New-Item -ItemType Directory -Force -Path $webRoot | Out-Null
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-32.png') -Width 32 -Height 32 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-192.png') -Width 192 -Height 192 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-512.png') -Width 512 -Height 512 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $webRoot 'apple-touch-icon.png') -Width 180 -Height 180 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $webRoot 'evenit-wordmark.png') -Width 1200 -Height 360 -Text 'evenit' -FontScale 0.40
 }
+
+function New-IosArtwork {
+    $assetRoot = Join-Path $projectRoot 'ios\App\App\Assets.xcassets'
+    New-BrandArtwork -Path (Join-Path $assetRoot 'AppIcon.appiconset\AppIcon-512@2x.png') -Width 1024 -Height 1024 -Text 'e' -FontScale 0.82
+    $splashRoot = Join-Path $assetRoot 'Splash.imageset'
+    @('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png') | ForEach-Object {
+        New-BrandArtwork -Path (Join-Path $splashRoot $_) -Width 2732 -Height 2732 -Text 'evenit' -FontScale 0.18
+    }
+}
+
+function New-AndroidArtwork {
+    $resourceRoot = Join-Path $projectRoot 'android\app\src\main\res'
+    Get-ChildItem $resourceRoot -Recurse -File -Filter 'splash.png' | ForEach-Object {
+        $existing = [System.Drawing.Image]::FromFile($_.FullName)
+        $width = $existing.Width
+        $height = $existing.Height
+        $existing.Dispose()
+        New-BrandArtwork -Path $_.FullName -Width $width -Height $height -Text 'evenit' -FontScale 0.22
+    }
+
+    Get-ChildItem $resourceRoot -Recurse -File -Filter 'ic_launcher.png' | ForEach-Object {
+        $existing = [System.Drawing.Image]::FromFile($_.FullName)
+        $size = $existing.Width
+        $existing.Dispose()
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82
+    }
+    Get-ChildItem $resourceRoot -Recurse -File -Filter 'ic_launcher_round.png' | ForEach-Object {
+        $existing = [System.Drawing.Image]::FromFile($_.FullName)
+        $size = $existing.Width
+        $existing.Dispose()
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82 -RoundBackground
+    }
+    Get-ChildItem $resourceRoot -Recurse -File -Filter 'ic_launcher_foreground.png' | ForEach-Object {
+        $existing = [System.Drawing.Image]::FromFile($_.FullName)
+        $size = $existing.Width
+        $existing.Dispose()
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.58 -Transparent
+    }
+}
+
+New-IconSet
+New-IosArtwork
+New-AndroidArtwork
+$privateFonts.Dispose()

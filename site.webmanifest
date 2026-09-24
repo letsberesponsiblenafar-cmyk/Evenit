@@ -1,0 +1,24 @@
+{
+  "name": "evenit",
+  "short_name": "evenit",
+  "description": "Make plans happen together.",
+  "start_url": "./#home",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#54259a",
+  "theme_color": "#54259a",
+  "icons": [
+    {
+      "src": "assets/brand/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/brand/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
