@@ -322,6 +322,127 @@ html[data-evenit-theme="dark"] .scan-reader { background: #101012 !important; }
   .aftermath-actions { gap: 5px !important; }
   .aftermath-actions button { font-size: 12px !important; padding-left: 7px !important; padding-right: 7px !important; }
 }
+
+/* Aftermath: one full-size medium at a time, with native touch swiping. */
+.aftermath-card .aftermath-carousel { position: relative; margin: 15px 0 0; background: #161419; overflow: hidden; }
+.aftermath-card .aftermath-carousel .aftermath-media { display: flex !important; width: 100%; margin: 0 !important; padding: 0 !important; gap: 0 !important; border-radius: 0 !important; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.aftermath-card .aftermath-carousel .aftermath-media::-webkit-scrollbar { display: none; }
+.aftermath-carousel .aftermath-media-item { position: relative; display: grid !important; place-items: center; flex: 0 0 100%; width: 100%; min-width: 100%; aspect-ratio: 4 / 5; margin: 0; border: 0 !important; border-radius: 0 !important; background: #161419 !important; scroll-snap-align: center; scroll-snap-stop: always; overflow: hidden; }
+.aftermath-carousel .aftermath-media-item.image img,
+.aftermath-carousel .aftermath-media-item.video video { display: block; width: 100% !important; height: 100% !important; max-height: none !important; object-fit: contain !important; background: #161419; }
+.aftermath-carousel .aftermath-media-item.pdf a,
+.aftermath-carousel .aftermath-media-item.file a { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; height: 100%; padding: 28px; color: #fff; text-align: left; text-decoration: none; }
+.aftermath-carousel .aftermath-media-item.pdf .pdf-icon,
+.aftermath-carousel .aftermath-media-item.file::before { display: grid; place-items: center; width: 58px; height: 70px; border: 1px solid rgba(255,255,255,.28); border-radius: 10px; background: rgba(255,255,255,.1); color: #fff; font: 800 12px/1 var(--font-ui); letter-spacing: .05em; }
+.aftermath-carousel .aftermath-media-item.pdf strong,
+.aftermath-carousel .aftermath-media-item.pdf small { display: block; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aftermath-carousel .aftermath-media-item.pdf strong { font: 700 14px/1.4 var(--font-ui); }
+.aftermath-carousel .aftermath-media-item.pdf small { margin-top: 4px; color: rgba(255,255,255,.7); font: 500 12px/1.4 var(--font-ui); }
+.aftermath-carousel-arrow { position: absolute; z-index: 2; top: 50%; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; background: rgba(20,18,24,.58); color: #fff; font: 400 28px/1 var(--font-ui); backdrop-filter: blur(8px); transform: translateY(-50%); cursor: pointer; }
+.aftermath-carousel-arrow.previous { left: 12px; }
+.aftermath-carousel-arrow.next { right: 12px; }
+.aftermath-carousel-arrow:disabled { opacity: 0; pointer-events: none; }
+.aftermath-carousel-dots { position: absolute; z-index: 2; left: 50%; bottom: 12px; display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 999px; background: rgba(18,16,21,.5); backdrop-filter: blur(7px); transform: translateX(-50%); }
+.aftermath-carousel-dots button { width: 6px; height: 6px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.5); cursor: pointer; transition: width .18s ease, background .18s ease; }
+.aftermath-carousel-dots button.active { width: 17px; border-radius: 999px; background: #fff; }
+
+/* Preserve authored paragraphs anywhere user-written copy is displayed. */
+.aftermath-body,
+.agenda-description,
+.public-event-note p,
+.home-event-description,
+.following-card-caption,
+.public-plan-caption,
+.preview-caption,
+.request-page-hero > p,
+.request-review-profile p,
+.post-body .caption,
+.profile-about-own,
+.public-profile-about p,
+.direct-bubble p,
+.group-bubble p { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+
+/* Public event pages collect every aftermath post attached to that event. */
+.public-event-aftermath { margin-top: 34px; padding-top: 24px; border-top: 1px solid var(--ui-line); }
+.public-event-aftermath > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 0 2px 16px; }
+.public-event-aftermath > header span { display: block; margin-bottom: 5px; color: var(--ui-teal); font: 700 10px/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; }
+.public-event-aftermath > header h3 { margin: 0; color: var(--ui-ink); font: 700 22px/1.18 var(--font-ui); letter-spacing: -.035em; }
+.public-event-aftermath > header > strong { flex: none; color: var(--ui-muted); font: 600 12px/1.3 var(--font-ui); }
+.public-event-aftermath .aftermath-card { max-width: 100%; }
+.public-event-aftermath-empty { display: grid; place-items: center; gap: 8px; min-height: 150px; padding: 24px; border: 1px dashed var(--ui-line); border-radius: var(--ui-radius); color: var(--ui-muted); text-align: center; }
+.public-event-aftermath-empty span { font-size: 28px; }
+.public-event-aftermath-empty p { margin: 0; font: 500 13px/1.5 var(--font-ui); }
+
+/* Aftermath composer with local media previews before anything is uploaded. */
+.aftermath-composer { width: min(700px,calc(100vw - 32px)) !important; max-width: 700px !important; max-height: min(90vh,860px) !important; padding: 0 !important; border: 1px solid var(--ui-line) !important; border-radius: 22px !important; background: var(--ui-surface) !important; overflow: auto !important; }
+.aftermath-composer-header { position: sticky; z-index: 3; top: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 26px 20px; border-bottom: 1px solid var(--ui-line); background: var(--ui-surface); }
+.aftermath-composer-header .overline { margin: 0 0 7px; }
+.aftermath-composer-header h2 { margin: 0; color: var(--ui-ink); font: 700 29px/1.12 var(--font-ui); letter-spacing: -.045em; }
+.aftermath-composer-header p:last-child { margin: 7px 0 0; color: var(--ui-muted); font: 500 13px/1.5 var(--font-ui); }
+.aftermath-composer-header .close-modal { position: static !important; display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; margin: 0; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--ui-subtle); color: var(--ui-ink); }
+.aftermath-composer-header .close-modal .evenit-icon { width: 20px; height: 20px; }
+.aftermath-composer > .aftermath-plan-picker,
+.aftermath-composer > #aftermath-form { padding: 22px 26px 26px; }
+.aftermath-composer form { display: grid; gap: 18px; }
+.aftermath-selected-plan { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--ui-subtle); }
+.aftermath-selected-plan > span { padding: 7px 9px; border-radius: 999px; background: var(--ui-teal-soft); color: var(--ui-teal); font: 700 10px/1 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.aftermath-selected-plan strong,
+.aftermath-selected-plan small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aftermath-selected-plan strong { color: var(--ui-ink); font: 700 14px/1.35 var(--font-ui); }
+.aftermath-selected-plan small { margin-top: 3px; color: var(--ui-muted); font: 500 12px/1.35 var(--font-ui); }
+.aftermath-field { display: grid; gap: 8px; margin: 0; color: var(--ui-ink); font: 700 13px/1.35 var(--font-ui); }
+.aftermath-field > span { display: flex; align-items: center; justify-content: space-between; }
+.aftermath-field > span small,
+.aftermath-field > small { color: var(--ui-muted); font: 500 11px/1.4 var(--font-ui); }
+.aftermath-field textarea,
+.aftermath-field input { width: 100%; margin: 0; border: 1px solid var(--ui-line); border-radius: 13px; background: var(--ui-bg); color: var(--ui-ink); font: 500 15px/1.55 var(--font-ui); }
+.aftermath-field textarea { min-height: 138px; padding: 13px 14px; resize: vertical; }
+.aftermath-field input { min-height: 46px; padding: 0 14px; }
+.aftermath-upload { padding: 16px; border: 1px solid var(--ui-line); border-radius: 16px; background: var(--ui-bg); }
+.aftermath-upload-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.aftermath-upload-heading strong,
+.aftermath-upload-heading small { display: block; }
+.aftermath-upload-heading strong { color: var(--ui-ink); font: 700 13px/1.35 var(--font-ui); }
+.aftermath-upload-heading small { margin-top: 3px; color: var(--ui-muted); font: 500 11px/1.4 var(--font-ui); }
+.aftermath-file-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: none; min-height: 40px; padding: 0 12px; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-surface); color: var(--ui-primary); font: 700 12px/1 var(--font-ui); cursor: pointer; }
+.aftermath-file-button .evenit-icon { width: 17px; height: 17px; }
+.aftermath-file-preview { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 14px; }
+.aftermath-upload-empty { grid-column: 1 / -1; display: grid; place-items: center; gap: 7px; min-height: 104px; padding: 18px; border: 1px dashed var(--ui-line); border-radius: 12px; color: var(--ui-muted); text-align: center; }
+.aftermath-upload-empty .evenit-icon { width: 27px; height: 27px; }
+.aftermath-upload-empty p { margin: 0; font: 500 12px/1.45 var(--font-ui); }
+.aftermath-draft-item { position: relative; display: grid; grid-template-columns: 74px minmax(0,1fr); align-items: center; gap: 11px; min-width: 0; padding: 8px 34px 8px 8px; border: 1px solid var(--ui-line); border-radius: 13px; background: var(--ui-surface); overflow: hidden; }
+.aftermath-draft-item > img,
+.aftermath-draft-item > video,
+.aftermath-draft-file-icon { width: 74px; height: 74px; border-radius: 9px; background: #18151d; object-fit: cover; }
+.aftermath-draft-file-icon { display: grid; place-items: center; color: #fff; font: 800 12px/1 var(--font-ui); letter-spacing: .06em; }
+.aftermath-draft-video { position: absolute; left: 13px; bottom: 13px; padding: 4px 6px; border-radius: 999px; background: rgba(18,16,21,.7); color: #fff; font: 700 9px/1 var(--font-ui); }
+.aftermath-draft-item > div:not(.aftermath-draft-file-icon) { min-width: 0; }
+.aftermath-draft-item strong,
+.aftermath-draft-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aftermath-draft-item strong { color: var(--ui-ink); font: 600 12px/1.35 var(--font-ui); }
+.aftermath-draft-item small { margin-top: 4px; color: var(--ui-muted); font: 500 10px/1.3 var(--font-ui); }
+.aftermath-draft-item > button { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 1px solid var(--ui-line); border-radius: 50%; background: var(--ui-surface); color: var(--ui-muted); font: 700 16px/1 var(--font-ui); cursor: pointer; }
+.aftermath-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding-top: 2px; }
+.aftermath-composer-actions p { flex: 1; min-height: 18px; margin: 0; color: var(--ui-muted); font: 500 11px/1.4 var(--font-ui); }
+.aftermath-composer-actions .publish-button { flex: 0 0 auto; min-width: 168px; }
+
+@media(max-width:650px) {
+  .aftermath-carousel-arrow { display: none; }
+  .aftermath-carousel .aftermath-media-item { aspect-ratio: 4 / 5; }
+  .aftermath-backdrop { align-items: flex-end !important; padding: 0 !important; }
+  .aftermath-composer { width: 100% !important; max-width: none !important; max-height: calc(100dvh - 26px) !important; border-width: 1px 0 0 !important; border-radius: 22px 22px 0 0 !important; }
+  .aftermath-composer-header { padding: 20px 18px 16px; }
+  .aftermath-composer-header h2 { font-size: 25px; }
+  .aftermath-composer-header p:last-child { max-width: 32ch; font-size: 12px; }
+  .aftermath-composer > .aftermath-plan-picker,
+  .aftermath-composer > #aftermath-form { padding: 18px 18px calc(24px + env(safe-area-inset-bottom)); }
+  .aftermath-upload-heading { align-items: flex-start; }
+  .aftermath-file-preview { grid-template-columns: 1fr; }
+  .aftermath-composer-actions { position: sticky; bottom: 0; margin: 0 -18px calc(-24px - env(safe-area-inset-bottom)); padding: 13px 18px calc(13px + env(safe-area-inset-bottom)); border-top: 1px solid var(--ui-line); background: var(--ui-surface); }
+  .aftermath-composer-actions p { display: none; }
+  .aftermath-composer-actions .publish-button { width: 100%; }
+  .public-event-aftermath > header h3 { font-size: 20px; }
+}
 @media(prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }

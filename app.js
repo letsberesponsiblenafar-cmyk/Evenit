@@ -279,11 +279,21 @@ async function loadAftermathFeed(target=postsEl){
   if(!supabase){ renderAftermathTarget([],target); return; }
   const aftRes=await supabase.rpc('get_aftermath_feed',{p_limit:20});
   const aftData=aftRes.data||[];
-  const withMedia=await Promise.all(aftData.map(async post=>{
-    const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id',post.id);
-    return {...post,media:media||[]};
-  }));
+  const withMedia=await attachAftermathMedia(aftData);
   renderAftermathTarget(withMedia,target);
+}
+async function attachAftermathMedia(items=[]){
+  if(!supabase||!items.length)return items;
+  const postIds=items.map(item=>item.id).filter(Boolean);
+  if(!postIds.length)return items;
+  const {data,error}=await supabase.from('plan_aftermath_media').select('post_id,file_url,file_type,file_name,created_at').in('post_id',postIds).order('created_at',{ascending:true});
+  if(error)return items.map(item=>({...item,media:item.media||[]}));
+  const grouped=new Map();
+  (data||[]).forEach(media=>{
+    if(!grouped.has(media.post_id))grouped.set(media.post_id,[]);
+    grouped.get(media.post_id).push(media);
+  });
+  return items.map(item=>({...item,media:grouped.get(item.id)||item.media||[]}));
 }
 function renderAftermathTarget(items,target){
   // Home is the plan board now. The same loader still powers aftermath on Discover.
@@ -379,26 +389,32 @@ async function getRankedDiscoverPlans({forSwipe=false}={}){
     return {...post,recommendationLabel:interestMatch?'Interest match':signal>0?'Based on your swipes':'Explore something new',discoverScore:score};
   }).sort((a,b)=>b.discoverScore-a.discoverScore);
 }
-function renderAftermathCards(items){
+function renderAftermathMedia(post){
+  const media=post.media||[];
+  if(!media.length)return '';
+  const slides=media.map((item,index)=>{
+    const position=`${index+1} of ${media.length}`;
+    if(item.file_type==='image')return '<figure class="aftermath-media-item image" data-carousel-slide="'+index+'"><img src="'+escapeHtml(item.file_url)+'" alt="Aftermath photo '+position+'" loading="lazy"></figure>';
+    if(item.file_type==='video')return '<figure class="aftermath-media-item video" data-carousel-slide="'+index+'"><video src="'+escapeHtml(item.file_url)+'" controls playsinline preload="metadata" aria-label="Aftermath video '+position+'"></video></figure>';
+    if(item.file_type==='pdf')return '<div class="aftermath-media-item pdf" data-carousel-slide="'+index+'"><a href="'+escapeHtml(item.file_url)+'" target="_blank" rel="noreferrer"><span class="pdf-icon">PDF</span><span><strong>'+escapeHtml(item.file_name||'Event document')+'</strong><small>Open document</small></span></a></div>';
+    return '<div class="aftermath-media-item file" data-carousel-slide="'+index+'"><a href="'+escapeHtml(item.file_url)+'" target="_blank" rel="noreferrer">'+escapeHtml(item.file_name||'Open attachment')+'</a></div>';
+  }).join('');
+  const navigation=media.length>1?'<button class="aftermath-carousel-arrow previous" type="button" data-carousel-previous aria-label="Previous media">‹</button><button class="aftermath-carousel-arrow next" type="button" data-carousel-next aria-label="Next media">›</button>':'';
+  const dots=media.length>1?'<div class="aftermath-carousel-dots" role="tablist" aria-label="Choose media">'+media.map((_,index)=>'<button type="button" role="tab" data-carousel-dot="'+index+'" aria-label="Show media '+(index+1)+'" aria-selected="'+(index===0)+'" class="'+(index===0?'active':'')+'"></button>').join('')+'</div>':'';
+  return '<div class="aftermath-carousel" data-aftermath-carousel data-active-slide="0"><div class="aftermath-media" data-aftermath-track tabindex="0" aria-label="'+media.length+' aftermath '+(media.length===1?'item':'items')+'">'+slides+'</div>'+navigation+dots+'</div>';
+}
+function renderAftermathCards(items,{showEventContext=true}={}){
   return items.map(post=>{
     const tags=(post.hashtags||[]).map(h=>'<span class="aftermath-tag">#'+escapeHtml(h)+'</span>').join(' ');
     const authorLabel=post.username?'@'+post.username:(post.full_name||'Evenit member');
-    const mediaHtml=(post.media||[]).map(m=>{
-      if(m.file_type==='image') return '<div class="aftermath-media-item image"><img src="'+escapeHtml(m.file_url)+'" alt="Photo" loading="lazy"></div>';
-      if(m.file_type==='video') return '<div class="aftermath-media-item video"><video src="'+escapeHtml(m.file_url)+'" controls preload="none"></video></div>';
-      if(m.file_type==='pdf') return '<a class="aftermath-media-item pdf" href="'+escapeHtml(m.file_url)+'" target="_blank" rel="noreferrer"><span class="pdf-icon">\uD83D\uDCC4</span><span class="pdf-name">'+escapeHtml(m.file_name||'PDF')+'</span></a>';
-      return '';
-    }).join('');
-    const gridClass=(post.media||[]).length>=3?'grid-3':(post.media||[]).length>=2?'grid-2':'';
+    const mediaHtml=renderAftermathMedia(post);
+    const eventContext=showEventContext?'<button class="aftermath-event-context" type="button" data-aftermath-event="'+escapeHtml(post.plan_id||'')+'" data-event-title="'+escapeHtml(post.plan_title||'')+'" data-event-location="'+escapeHtml(post.plan_location||'')+'"><span class="aftermath-event-badge">Lived</span><span class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'Event details')+'</span>'+(post.plan_location?'<span class="aftermath-event-loc">\uD83D\uDCCD '+escapeHtml(post.plan_location)+'</span>':'')+'</span><span class="aftermath-event-arrow" aria-hidden="true">›</span></button>':'';
     return '<article class="aftermath-card" data-aftermath-id="'+escapeHtml(post.id)+'">'
       +'<button class="aftermath-author-line" type="button" data-public-profile-id="'+escapeHtml(post.author_id)+'">'+escapeHtml(authorLabel)+'</button>'
-      +'<button class="aftermath-event-context" type="button" data-aftermath-event="'+escapeHtml(post.plan_id||'')+'" data-event-title="'+escapeHtml(post.plan_title||'')+'" data-event-location="'+escapeHtml(post.plan_location||'')+'"><span class="aftermath-event-badge">Lived</span>'
-      +'<span class="aftermath-event-info"><span class="aftermath-event-title">'+escapeHtml(post.plan_title||'Event details')+'</span>'
-      +(post.plan_location?'<span class="aftermath-event-loc">\uD83D\uDCCD '+escapeHtml(post.plan_location)+'</span>':'')
-      +'</span><span class="aftermath-event-arrow" aria-hidden="true">›</span></button>'
+      +eventContext
       +'<div class="aftermath-body">'+escapeHtml(post.body)+'</div>'
       +(tags?'<div class="aftermath-tags">'+tags+'</div>':'')
-      +(mediaHtml?'<div class="aftermath-media '+gridClass+'">'+mediaHtml+'</div>':'')
+      +mediaHtml
       +'<div class="aftermath-stats">'
       +(post.like_count?'<span>'+post.like_count+' '+(post.like_count===1?'like':'likes')+'</span>':'')
       +(post.comment_count?'<span>'+post.comment_count+' '+(post.comment_count===1?'comment':'comments')+'</span>':'')
@@ -409,6 +425,40 @@ function renderAftermathCards(items){
       +'<button class="aftermath-action save" data-aftermath-save="'+escapeHtml(post.id)+'" aria-label="Save aftermath" aria-pressed="false"><span class="action-icon">'+icon('bookmark')+'</span></button>'
       +'</div></article>';
   }).join('');
+}
+function wireAftermathCarousels(scope=document){
+  scope.querySelectorAll('[data-aftermath-carousel]').forEach(carousel=>{
+    if(carousel.dataset.carouselReady==='true')return;
+    carousel.dataset.carouselReady='true';
+    const track=carousel.querySelector('[data-aftermath-track]');
+    const slides=[...carousel.querySelectorAll('[data-carousel-slide]')];
+    const dots=[...carousel.querySelectorAll('[data-carousel-dot]')];
+    const previous=carousel.querySelector('[data-carousel-previous]');
+    const next=carousel.querySelector('[data-carousel-next]');
+    if(!track||slides.length<2)return;
+    const activate=index=>{
+      const active=Math.max(0,Math.min(slides.length-1,index));
+      carousel.dataset.activeSlide=String(active);
+      dots.forEach((dot,dotIndex)=>{dot.classList.toggle('active',dotIndex===active);dot.setAttribute('aria-selected',String(dotIndex===active));});
+      if(previous)previous.disabled=active===0;
+      if(next)next.disabled=active===slides.length-1;
+    };
+    const goTo=index=>{track.scrollTo({left:track.clientWidth*index,behavior:'smooth'});activate(index);};
+    let frame=0;
+    track.addEventListener('scroll',()=>{
+      cancelAnimationFrame(frame);
+      frame=requestAnimationFrame(()=>activate(Math.round(track.scrollLeft/Math.max(track.clientWidth,1))));
+    },{passive:true});
+    dots.forEach(dot=>dot.addEventListener('click',()=>goTo(Number(dot.dataset.carouselDot))));
+    previous?.addEventListener('click',()=>goTo(Number(carousel.dataset.activeSlide||0)-1));
+    next?.addEventListener('click',()=>goTo(Number(carousel.dataset.activeSlide||0)+1));
+    track.addEventListener('keydown',event=>{
+      if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;
+      event.preventDefault();
+      goTo(Number(carousel.dataset.activeSlide||0)+(event.key==='ArrowRight'?1:-1));
+    });
+    activate(0);
+  });
 }
 function wireFollowingJoinButtons(){
   document.querySelectorAll('[data-following-join]').forEach(btn=>{
@@ -429,6 +479,7 @@ function wireFollowingJoinButtons(){
   });
 }
 function wireAftermathActions(){
+  wireAftermathCarousels();
   document.querySelectorAll('[data-aftermath-like]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.aftermathLike;const liked=b.classList.contains('liked');
     if(!supabase||!currentUser){showToast('Log in to like');return;}
@@ -1092,10 +1143,7 @@ async function getProfileAftermath(profileId){
   if(!supabase||!profileId)return [];
   const {data,error}=await supabase.rpc('get_profile_aftermath',{p_user_id:profileId,p_limit:20});
   if(error)throw error;
-  return Promise.all((data||[]).map(async post=>{
-    const {data:media}=await supabase.from('plan_aftermath_media').select('file_url,file_type,file_name').eq('post_id',post.id);
-    return {...post,media:media||[]};
-  }));
+  return attachAftermathMedia(data||[]);
 }
 async function loadPublicAftermath(profileId){
   const target=[...document.querySelectorAll('.public-aftermath')].find(element=>element.dataset.aftermathProfile===profileId);
@@ -1977,7 +2025,7 @@ async function renderLivedOn(container){
     container.innerHTML=`<div class="lived-header"><div><p class="lived-label">Your stories</p><p class="lived-sub">Share the moments that stayed with you.</p></div><button class="lived-share-button" type="button" data-lived-share>Share a lived event</button></div><div class="lived-empty"><div class="lived-empty-icon">\u25CE</div><h3>Your aftermath starts here</h3><p>Only stories you share from events you attended appear on your profile.</p><div class="lived-events-list">${data.map(row=>`<div class="lived-event-item" data-lived-add="${escapeHtml(row.plan_id)}"><span class="lived-event-dot">\u2713</span><div><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.location||'')} \u00b7 ${new Date(row.starts_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></div><button class="lived-add-btn">Share</button></div>`).join('')}</div></div>`;
     container.querySelector('[data-lived-share]')?.addEventListener('click',()=>openAftermathPlanPicker(data));
     container.querySelectorAll('[data-lived-add]').forEach(el=>{
-      el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
+      el.onclick=()=>openAftermathComposer(el.dataset.livedAdd,data.find(row=>row.plan_id===el.dataset.livedAdd)||{});
     });
     return;
   }
@@ -1991,20 +2039,79 @@ async function renderLivedOn(container){
   container.innerHTML=`<div class="lived-header"><div><p class="lived-label">Your stories</p><p class="lived-sub">${allPosts.length} aftermath ${allPosts.length===1?'post':'posts'} from ${data.length} event${data.length===1?'':'s'}</p></div><button class="lived-share-button" type="button" data-lived-share>Share a lived event</button></div><div class="lived-feed">${livedPostsHtml}</div>${eventsHtml}`;
   container.querySelector('[data-lived-share]')?.addEventListener('click',()=>openAftermathPlanPicker(data));
   container.querySelectorAll('[data-lived-add]').forEach(el=>{
-    el.onclick=()=>openAftermathComposer(el.dataset.livedAdd);
+    el.onclick=()=>openAftermathComposer(el.dataset.livedAdd,data.find(row=>row.plan_id===el.dataset.livedAdd)||{});
   });
   wireAftermathActions();
 }
 let activeAftermathPlanId=null;
-function openAftermathComposer(planId){
+let aftermathDraftFiles=[];
+let aftermathPreviewUrls=[];
+function clearAftermathPreviewUrls(){
+  aftermathPreviewUrls.forEach(url=>URL.revokeObjectURL(url));
+  aftermathPreviewUrls=[];
+}
+function renderAftermathFilePreviews(){
+  const list=document.querySelector('#aftermath-file-list');
+  if(!list)return;
+  clearAftermathPreviewUrls();
+  if(!aftermathDraftFiles.length){
+    list.innerHTML='<div class="aftermath-upload-empty"><span>'+icon('image')+'</span><p>Your selected media will appear here.</p></div>';
+    return;
+  }
+  list.innerHTML=aftermathDraftFiles.map((file,index)=>{
+    const label=escapeHtml(file.name);
+    const size=file.size>=1048576?`${(file.size/1048576).toFixed(1)} MB`:`${Math.max(1,Math.round(file.size/1024))} KB`;
+    let preview='<div class="aftermath-draft-file-icon">FILE</div>';
+    if(file.type.startsWith('image/')){
+      const url=URL.createObjectURL(file);aftermathPreviewUrls.push(url);
+      preview='<img src="'+url+'" alt="Preview of '+label+'">';
+    }else if(file.type.startsWith('video/')){
+      const url=URL.createObjectURL(file);aftermathPreviewUrls.push(url);
+      preview='<video src="'+url+'" muted playsinline preload="metadata" aria-label="Preview of '+label+'"></video><span class="aftermath-draft-video">Video</span>';
+    }else if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)){
+      preview='<div class="aftermath-draft-file-icon">PDF</div>';
+    }
+    return '<article class="aftermath-draft-item">'+preview+'<div><strong>'+label+'</strong><small>'+size+'</small></div><button type="button" data-remove-aftermath-file="'+index+'" aria-label="Remove '+label+'">×</button></article>';
+  }).join('');
+  list.querySelectorAll('[data-remove-aftermath-file]').forEach(button=>button.onclick=()=>{
+    aftermathDraftFiles.splice(Number(button.dataset.removeAftermathFile),1);
+    renderAftermathFilePreviews();
+  });
+}
+function resetAftermathComposer(){
+  aftermathDraftFiles=[];
+  const input=document.querySelector('#aftermath-files');
+  if(input)input.value='';
+  clearAftermathPreviewUrls();
+  renderAftermathFilePreviews();
+}
+function setAftermathPlanSummary(planId,context={}){
+  const known=posts.find(post=>post.id===planId)||{};
+  const plan={...known,...context};
+  const summary=document.querySelector('#aftermath-selected-plan');
+  if(!summary)return;
+  summary.querySelector('strong').textContent=plan.title||'Selected event';
+  summary.querySelector('small').textContent=[plan.location,plan.starts_at?formatDateTime(plan.starts_at):''].filter(Boolean).join(' · ')||'Your checked-in event';
+}
+function openAftermathComposer(planId,context={}){
   activeAftermathPlanId=planId;
   const m=document.querySelector('#aftermath-modal');
-  if(m){ m.querySelector('#aftermath-plan-picker').hidden=true; m.querySelector('#aftermath-form').hidden=false; m.classList.add('open'); m.querySelector('#aftermath-status').textContent=''; m.querySelector('#aftermath-body').value=''; m.querySelector('#aftermath-tags').value=''; const list=m.querySelector('#aftermath-file-list'); if(list) list.innerHTML=''; const inp=m.querySelector('#aftermath-files'); if(inp) inp.value=''; }
+  if(m){
+    m.querySelector('#aftermath-plan-picker').hidden=true;
+    m.querySelector('#aftermath-form').hidden=false;
+    m.classList.add('open');
+    m.querySelector('#aftermath-status').textContent='';
+    m.querySelector('#aftermath-body').value='';
+    m.querySelector('#aftermath-tags').value='';
+    resetAftermathComposer();
+    setAftermathPlanSummary(planId,context);
+    setTimeout(()=>m.querySelector('#aftermath-body')?.focus(),80);
+  }
 }
 function openAftermathPlanPicker(events){
   const available=(events||[]).filter(event=>event?.plan_id);
   if(!available.length){showToast('There are no lived events ready to share yet.');return;}
-  if(available.length===1){openAftermathComposer(available[0].plan_id);return;}
+  if(available.length===1){openAftermathComposer(available[0].plan_id,available[0]);return;}
   const modal=document.querySelector('#aftermath-modal');
   const picker=document.querySelector('#aftermath-plan-picker');
   const options=document.querySelector('#aftermath-plan-options');
@@ -2013,7 +2120,7 @@ function openAftermathPlanPicker(events){
   picker.hidden=false;
   modal.querySelector('#aftermath-form').hidden=true;
   modal.classList.add('open');
-  options.querySelectorAll('[data-aftermath-plan]').forEach(button=>button.onclick=()=>openAftermathComposer(button.dataset.aftermathPlan));
+  options.querySelectorAll('[data-aftermath-plan]').forEach(button=>button.onclick=()=>openAftermathComposer(button.dataset.aftermathPlan,available.find(event=>event.plan_id===button.dataset.aftermathPlan)||{}));
 }
 async function submitAftermath(e){
   e.preventDefault();
@@ -2022,34 +2129,58 @@ async function submitAftermath(e){
   const body=document.querySelector('#aftermath-body')?.value?.trim();
   const tagsRaw=document.querySelector('#aftermath-tags')?.value||'';
   const hashtags=tagsRaw.split(/[#,\s]+/).map(s=>s.trim().replace(/^#/,'')).filter(Boolean).slice(0,10);
-  const files=document.querySelector('#aftermath-files')?.files;
+  const files=[...aftermathDraftFiles];
   const status=document.querySelector('#aftermath-status');
+  const submit=e.currentTarget.querySelector('[type="submit"]');
   if(!body){ status.textContent='Write something'; return; }
-  status.textContent='Posting...';
-  const {data:post,error}=await supabase.from('plan_aftermath_posts').insert({plan_id:activeAftermathPlanId, author_id:currentUser.id, body, hashtags}).select('id').single();
-  if(error){ status.textContent=error.message; showToast(error.message); return; }
-  if(files && files.length){
-    for(const file of files){
+  if(submit.disabled)return;
+  submit.disabled=true;
+  status.textContent=files.length?'Sharing story and media…':'Sharing story…';
+  try{
+    const {data:post,error}=await supabase.from('plan_aftermath_posts').insert({plan_id:activeAftermathPlanId, author_id:currentUser.id, body, hashtags}).select('id').single();
+    if(error)throw error;
+    let failedUploads=0;
+    for(const [index,file] of files.entries()){
+      status.textContent=`Uploading ${index+1} of ${files.length}…`;
       const ext=file.name.split('.').pop().toLowerCase();
       const type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':ext==='pdf'?'pdf':'other';
-      const path=`${currentUser.id}/${post.id}-${Date.now()}-${file.name}`;
-      const {error:upErr}=await supabase.storage.from('aftermath-media').upload(path, file, {upsert:true, contentType:file.type});
-      if(upErr){ status.textContent=upErr.message; continue; }
+      const safeName=file.name.replace(/[^a-z0-9._-]+/gi,'-');
+      const path=`${currentUser.id}/${post.id}-${Date.now()}-${index}-${safeName}`;
+      const {error:upErr}=await supabase.storage.from('aftermath-media').upload(path,file,{upsert:false,contentType:file.type});
+      if(upErr){failedUploads++;continue;}
       const {data:pub}=supabase.storage.from('aftermath-media').getPublicUrl(path);
-      await supabase.from('plan_aftermath_media').insert({post_id:post.id, file_url:pub.publicUrl, file_type:type, file_name:file.name});
+      const {error:mediaError}=await supabase.from('plan_aftermath_media').insert({post_id:post.id,file_url:pub.publicUrl,file_type:type,file_name:file.name});
+      if(mediaError)failedUploads++;
     }
+    status.textContent=failedUploads?`Shared · ${failedUploads} ${failedUploads===1?'file':'files'} could not upload`:'Shared ✓';
+    showToast(failedUploads?'Aftermath shared with some media missing':'Aftermath shared');
+    setTimeout(()=>{
+      closeAftermathComposer();
+      const tab=[...document.querySelectorAll('.profile-tabs button')].find(button=>button.textContent.includes('Lived'));
+      if(tab)renderProfileTab(tab);
+    },700);
+  }catch(error){
+    status.textContent=error.message||'Could not share this aftermath.';
+    showToast(error.message||'Could not share this aftermath.');
+  }finally{
+    submit.disabled=false;
   }
-  status.textContent='Posted ✓';
-  showToast('Aftermath shared');
-  setTimeout(()=>{ document.querySelector('#aftermath-modal')?.classList.remove('open'); const tab=[...document.querySelectorAll('.profile-tabs button')].find(button=>button.textContent.includes('Lived')); if(tab) renderProfileTab(tab); }, 600);
 }
-document.querySelector('#close-aftermath-modal')?.addEventListener('click', ()=>document.querySelector('#aftermath-modal')?.classList.remove('open'));
-document.querySelector('#aftermath-modal')?.addEventListener('click', e=>{ if(e.target.id==='aftermath-modal') e.currentTarget.classList.remove('open'); });
+function closeAftermathComposer(){
+  document.querySelector('#aftermath-modal')?.classList.remove('open');
+  activeAftermathPlanId=null;
+  resetAftermathComposer();
+}
+document.querySelector('#close-aftermath-modal')?.addEventListener('click',closeAftermathComposer);
+document.querySelector('#aftermath-modal')?.addEventListener('click',e=>{if(e.target.id==='aftermath-modal')closeAftermathComposer();});
 document.querySelector('#aftermath-form')?.addEventListener('submit', submitAftermath);
 document.querySelector('#aftermath-files')?.addEventListener('change', e=>{
-  const list=document.querySelector('#aftermath-file-list');
-  if(!list) return;
-  list.innerHTML=[...e.target.files].map(f=>`<span style="font:500 11px -apple-system,sans-serif;background:#F5F5F7;border:1px solid #E8E8ED;border-radius:999px;padding:6px 10px">${escapeHtml(f.name)} · ${(f.size/1024).toFixed(0)}KB</span>`).join('');
+  const incoming=[...e.target.files];
+  const known=new Set(aftermathDraftFiles.map(file=>`${file.name}:${file.size}:${file.lastModified}`));
+  incoming.forEach(file=>{const key=`${file.name}:${file.size}:${file.lastModified}`;if(!known.has(key)&&aftermathDraftFiles.length<10){aftermathDraftFiles.push(file);known.add(key);}});
+  e.target.value='';
+  renderAftermathFilePreviews();
+  if(incoming.length&&aftermathDraftFiles.length===10)document.querySelector('#aftermath-status').textContent='Maximum 10 media items.';
 });
 
 
@@ -3167,6 +3298,24 @@ window.addEventListener('popstate',()=>{
   if(publicEventSource&&document.querySelector('.public-event-page'))restorePublicEventSource();
 });
 
+async function loadEventAftermath(planId,plan={}){
+  if(!supabase||!planId)return [];
+  const {data,error}=await supabase.rpc('get_aftermath_for_plan',{p_plan_id:planId});
+  if(error)throw error;
+  const withMedia=await attachAftermathMedia(data||[]);
+  const postIds=withMedia.map(post=>post.id).filter(Boolean);
+  if(!postIds.length)return [];
+  const [likesResult,commentsResult]=await Promise.all([
+    supabase.from('plan_aftermath_likes').select('post_id,user_id').in('post_id',postIds),
+    supabase.from('plan_aftermath_comments').select('post_id').in('post_id',postIds)
+  ]);
+  const likes=new Map();
+  const comments=new Map();
+  (likesResult.data||[]).forEach(row=>likes.set(row.post_id,(likes.get(row.post_id)||0)+1));
+  (commentsResult.data||[]).forEach(row=>comments.set(row.post_id,(comments.get(row.post_id)||0)+1));
+  return withMedia.map(post=>({...post,plan_title:plan.title,plan_location:plan.location,plan_starts_at:plan.starts_at,like_count:likes.get(post.id)||0,comment_count:comments.get(post.id)||0,liked:Boolean(currentUser&&(likesResult.data||[]).some(row=>row.post_id===post.id&&row.user_id===currentUser.id))}));
+}
+
 async function openPublicEventDetails(planId,fallback={},options={}){
   if(!planId){showToast('This event is no longer available.');return;}
   const activePage=pageView.hidden?'home':(document.querySelector('[data-page].active')?.dataset.page||'discover');
@@ -3178,19 +3327,26 @@ async function openPublicEventDetails(planId,fallback={},options={}){
   pageView.innerHTML='<section class="public-event-page public-event-loading"><span class="public-event-kicker">Lived</span><h2>Loading event details…</h2></section>';
   const known=posts.find(post=>post.id===planId);
   let plan={...fallback,...known,id:planId};
+  let eventAftermath=[];
   if(supabase){
     const {data,error}=await supabase.from('plans').select('id,title,location,starts_at,caption,category,capacity,user_id').eq('id',planId).maybeSingle();
     if(!error&&data)plan={...plan,...data};
-    const {data:summary}=await supabase.rpc('get_plan_summaries',{p_plan_ids:[planId]});
+    const [{data:summary},aftermathResult]=await Promise.all([
+      supabase.rpc('get_plan_summaries',{p_plan_ids:[planId]}),
+      loadEventAftermath(planId,plan).catch(()=>[])
+    ]);
     const counts=rpcRow(summary)||{};
     if(Number.isFinite(Number(counts.confirmed_count)))plan.joinedCount=Number(counts.confirmed_count);
+    eventAftermath=aftermathResult;
   }
   const when=plan.starts_at?formatDateTime(plan.starts_at):'Date to be announced';
   const attendance=plan.capacity?`${plan.joinedCount||0} of ${plan.capacity} confirmed`:`${plan.joinedCount||0} confirmed`;
   const isPast=plan.starts_at&&new Date(plan.starts_at)<new Date();
   const canRequest=known&&!isPast&&!known.isOwner&&!known.membershipStatus;
-  pageView.innerHTML=`<section class="public-event-page"><span class="public-event-kicker">Lived</span><h2>${escapeHtml(plan.title||'Event details')}</h2><p class="public-event-lead">Everything the host chose to make public about this event.</p><div class="public-event-detail-grid"><section><span>When</span><strong>${escapeHtml(when)}</strong></section><section><span>Where</span><a href="${mapUrl(plan.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(plan.location||'Location to be announced')} ↗</a></section><section><span>Attendance</span><strong>${escapeHtml(attendance)}</strong></section></div>${plan.caption?`<section class="public-event-note"><h3>About this event</h3><p>${escapeHtml(plan.caption)}</p></section>`:''}<p class="public-event-privacy">Private requests, guest answers, and host insights are not shown here.</p>${canRequest?'<button class="public-event-join" type="button" data-public-event-join>Request to join</button>':''}</section>`;
+  const aftermathSection=`<section class="public-event-aftermath"><header><div><span>Aftermath</span><h3>Moments from this event</h3></div><strong>${eventAftermath.length} ${eventAftermath.length===1?'post':'posts'}</strong></header>${eventAftermath.length?renderAftermathCards(eventAftermath,{showEventContext:false}):'<div class="public-event-aftermath-empty"><span>◌</span><p>No one has shared an aftermath from this event yet.</p></div>'}</section>`;
+  pageView.innerHTML=`<section class="public-event-page"><span class="public-event-kicker">Lived</span><h2>${escapeHtml(plan.title||'Event details')}</h2><p class="public-event-lead">Everything the host chose to make public about this event.</p><div class="public-event-detail-grid"><section><span>When</span><strong>${escapeHtml(when)}</strong></section><section><span>Where</span><a href="${mapUrl(plan.location||'')}" target="_blank" rel="noreferrer">${escapeHtml(plan.location||'Location to be announced')} ↗</a></section><section><span>Attendance</span><strong>${escapeHtml(attendance)}</strong></section></div>${plan.caption?`<section class="public-event-note"><h3>About this event</h3><p>${escapeHtml(plan.caption)}</p></section>`:''}<p class="public-event-privacy">Private requests, guest answers, and host insights are not shown here.</p>${canRequest?'<button class="public-event-join" type="button" data-public-event-join>Request to join</button>':''}${aftermathSection}</section>`;
   pageView.querySelector('[data-public-event-join]')?.addEventListener('click',event=>requestPlanInterest(known,event.currentTarget));
+  wireAftermathActions();
 }
 
 window.openEvenitPublicEvent=(planId,options={})=>openPublicEventDetails(planId,{},options);
@@ -3233,6 +3389,7 @@ window.addEventListener('evenit:native-back',()=>{
   const overlay=document.querySelector('.scan-backdrop.open,.sheet-backdrop.open,.modal-backdrop.open,.login-backdrop.open,.edit-backdrop.open');
   if(overlay){
     if(overlay===scanModal)closeScanModal();
+    else if(overlay.id==='aftermath-modal')closeAftermathComposer();
     else overlay.classList.remove('open');
     return;
   }
