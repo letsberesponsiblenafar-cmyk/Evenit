@@ -2,19 +2,23 @@
   "scripts": {
     "preview": "node scripts/preview.mjs",
     "check": "node scripts/check.mjs",
-    "test": "npm run check && node --test scripts/test-navigation.mjs scripts/test-live-updates.mjs scripts/test-camera.mjs scripts/test-aftermath.mjs scripts/test-shared-links.mjs scripts/test-discover-experience.mjs scripts/test-owner-deletion.mjs",
+    "test": "npm run check && node --test scripts/test-navigation.mjs scripts/test-live-updates.mjs scripts/test-camera.mjs scripts/test-aftermath.mjs scripts/test-shared-links.mjs scripts/test-discover-experience.mjs scripts/test-owner-deletion.mjs scripts/test-ios-platform.mjs",
     "mobile:copy": "node scripts/build-mobile.mjs",
-    "mobile:sync": "npm run mobile:copy && npx cap sync android",
-    "android:apk": "npm run mobile:sync && cd android && gradlew.bat assembleDebug"
+    "mobile:sync": "npm run mobile:copy && npx cap sync android && npx cap sync ios",
+    "mobile:sync:android": "npm run mobile:copy && npx cap sync android",
+    "mobile:sync:ios": "npm run mobile:copy && npx cap sync ios",
+    "android:apk": "npm run mobile:sync:android && cd android && gradlew.bat assembleDebug",
+    "ios:open": "npm run mobile:sync:ios && npx cap open ios"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.1",
+    "@capacitor/cli": "^8.5.2",
     "supabase": "^2.115.0"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.1",
+    "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
-    "@capacitor/core": "^8.5.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "@capacitor/network": "^8.0.1"
   }
 }

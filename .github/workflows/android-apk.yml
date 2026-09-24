@@ -26,7 +26,7 @@ jobs:
       - name: Install the app tooling
         run: npm ci
       - name: Sync the mobile app
-        run: npm run mobile:sync
+        run: npm run mobile:sync:android
       - name: Build a sideloadable APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug

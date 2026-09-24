@@ -2,8 +2,14 @@
   "appId": "app.evenit.mobile",
   "appName": "Evenit",
   "webDir": "mobile/www",
+  "ios": {
+    "backgroundColor": "#100e14",
+    "contentInset": "never",
+    "allowsLinkPreview": false,
+    "preferredContentMode": "mobile"
+  },
   "server": {
-    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/?app=1.17",
+    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/?app=1.18",
     "androidScheme": "https",
     "allowNavigation": [
       "letsberesponsiblenafar-cmyk.github.io",

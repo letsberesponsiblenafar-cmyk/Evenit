@@ -1,0 +1,50 @@
+name: Validate iOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ios/**'
+      - 'mobile/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'scripts/build-mobile.mjs'
+      - '.github/workflows/ios-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  simulator-build:
+    name: Build Evenit for the iOS Simulator
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Sync the shared Evenit interface into iOS
+        run: npm run mobile:sync:ios
+      - name: Build without device signing
+        run: >-
+          xcodebuild
+          -project ios/App/App.xcodeproj
+          -scheme App
+          -configuration Debug
+          -sdk iphonesimulator
+          -derivedDataPath ios/build
+          CODE_SIGNING_ALLOWED=NO
+          build
+      - name: Package the simulator build
+        run: ditto -c -k --sequesterRsrc --keepParent ios/build/Build/Products/Debug-iphonesimulator/App.app Evenit-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Evenit-iOS-Simulator
+          path: Evenit-iOS-Simulator.zip
+          if-no-files-found: error
