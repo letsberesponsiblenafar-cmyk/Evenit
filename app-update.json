@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.17",
+  "versionCode": 19,
+  "versionName": "1.18",
   "apkUrl": "https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk",
-  "message": "Camera scanning is more reliable, with a QR-photo fallback and the latest interface improvements."
+  "message": "The new evenit identity is ready, with Abask branding, a matching app icon, and a refined launch screen."
 }
