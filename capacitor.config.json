@@ -9,10 +9,11 @@
     "preferredContentMode": "mobile"
   },
   "server": {
-    "url": "https://letsberesponsiblenafar-cmyk.github.io/Evenit/?app=1.18",
+    "url": "https://evenit.vercel.app/?app=1.19",
     "androidScheme": "https",
     "allowNavigation": [
       "letsberesponsiblenafar-cmyk.github.io",
+      "evenit.vercel.app",
       "sidnyjkllimorfkbwrcz.supabase.co"
     ]
   }

@@ -704,7 +704,7 @@ function loadPlansPreservingHostWorkspace(){
 const pageTemplates={
   discover:`<div class="page-header"><p class="overline">Find your people</p><h2>Discover plans<br><em>worth joining.</em></h2><div class="search-box">${icon('search')} <input placeholder="Search plans, places, or people..."></div></div><div class="discover-grid"><div class="discover-tile tile-violet"><small>OUTDOORS</small><strong>Golden hour<br>on the water</strong><span>16 people going →</span></div><div class="discover-tile tile-gold"><small>FOOD & DRINK</small><strong>Sunday supper<br>club</strong><span>12 people going →</span></div><div class="discover-tile tile-ink"><small>CREATIVE</small><strong>Make a tiny<br>zine together</strong><span>8 people going →</span></div></div>`,
   notifications:`<div class="page-header"><p class="overline">Stay in the loop</p><h2>Notifications</h2></div><div class="activity-list"><div class="activity"><img src="https://i.pravatar.cc/100?img=47"><p><strong>ari.makes</strong> joined your plan <b>Sunset picnic</b><small>12 minutes ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=25"><p><strong>maya.rose</strong> liked your plan <b>Saturday sketch walk</b><small>1 hour ago</small></p></div><div class="activity"><img src="https://i.pravatar.cc/100?img=44"><p><strong>theo.walks</strong> started following you<small>Yesterday</small></p></div></div>`,
-  messages:`<div class="page-header message-header"><div><p class="overline">Keep the plan moving</p><h2>Messages</h2><p>Conversations and private circles, in one calm place.</p></div><button class="message-compose" type="button" title="New message" aria-label="Start a new conversation">✎ <span>New</span></button></div><div class="message-availability"><span class="online-dot"></span><strong>Your circles are up to date</strong><small>Replies, group notes, and event chats live here.</small></div><div class="msg-toggle" role="tablist"><button class="msg-tab active" data-msg-tab="primary">Primary <small>2</small></button><button class="msg-tab" data-msg-tab="groups">Groups</button></div><div id="msg-primary-pane" class="msg-pane"><div class="message-list"><button class="message"><img src="https://i.pravatar.cc/100?img=25" alt=""><div><strong>maya.rose <span class="message-presence"></span></strong><p>Should we bring extra blankets for the picnic?</p></div><small>2m</small></button><button class="message"><img src="https://i.pravatar.cc/100?img=47" alt=""><div><strong>ari.makes</strong><p>That coffee walk sounds perfect.</p></div><small>1h</small></button></div><div class="message-note"><span>✦</span><div><strong>Keep good plans close</strong><p>Join a plan to start a new conversation.</p></div></div></div><div id="msg-groups-pane" class="msg-pane" hidden><div class="groups-heading"><div><h3>Groups</h3><p>Private circles for members only.</p></div><button class="publish-button" id="open-group-create">＋ Create</button></div><div id="groups-list" class="groups-list"></div></div>`,
+  messages:`<section class="messages-inbox"><div class="page-header message-header"><div><h2>Messages</h2></div><button class="message-compose" type="button" title="New message" aria-label="Start a new conversation">${icon('plus')}<span>New</span></button></div><div id="message-filter-panel" class="message-filter-panel" role="menu" aria-label="Message filters" hidden><button type="button" class="selected" data-message-filter="all" role="menuitemradio" aria-checked="true"><span><strong>All conversations</strong><small>Direct messages and groups</small></span><b>✓</b></button><button type="button" data-message-filter="unread" role="menuitemradio" aria-checked="false"><span><strong>Unread only</strong><small>Messages you have not opened</small></span><b><i id="message-unread-total">0</i></b></button></div><div class="msg-toggle" role="tablist" aria-label="Message type"><button class="msg-tab active" data-msg-tab="primary" role="tab" aria-selected="true">People <small>0</small></button><button class="msg-tab" data-msg-tab="groups" role="tab" aria-selected="false">Groups <small>0</small></button></div><div id="msg-primary-pane" class="msg-pane"><div class="message-list" aria-live="polite"><div class="message-loading">Loading conversations…</div></div></div><div id="msg-groups-pane" class="msg-pane" hidden><div class="groups-heading"><div><h3>Your groups</h3><p>Only added members can read and reply.</p></div><button class="group-create-button" id="open-group-create" type="button">${icon('plus')}<span>Create</span></button></div><div id="groups-list" class="groups-list" aria-live="polite"></div></div></section>`,
   settings:`<div class="page-header"><p class="overline">Make it yours</p><h2>Settings</h2><p class="settings-intro">Control the parts of Evenit that matter to you.</p></div><div class="settings-list"><button data-settings-panel="account"><span class="settings-icon">${icon('profile')}</span><span><strong>Account details</strong><small>Name, username, profile and email</small></span><b>›</b></button><button data-settings-panel="notifications"><span class="settings-icon">${icon('heart')}</span><span><strong>Notification preferences</strong><small>Choose what reaches you</small></span><b>›</b></button><button data-settings-panel="privacy"><span class="settings-icon">${icon('lock')}</span><span><strong>Privacy and safety</strong><small>Profile visibility and location</small></span><b>›</b></button><div class="settings-platform-downloads" aria-label="Download evenit"><a class="settings-download" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/releases/latest/download/Evenit.apk" target="_blank" rel="noreferrer"><span class="settings-icon">${icon('download')}</span><span><strong>Android app</strong><small>Download the latest installable APK</small></span><b>↗</b></a><a class="settings-download" href="https://github.com/letsberesponsiblenafar-cmyk/Evenit/actions/workflows/ios-build.yml" target="_blank" rel="noreferrer"><span class="settings-icon">${icon('download')}</span><span><strong>iOS build</strong><small>View the verified build · signed iPhone release pending</small></span><b>↗</b></a></div><button data-settings-panel="help"><span class="settings-icon">${icon('help')}</span><span><strong>Help center</strong><small>Answers and support</small></span><b>›</b></button></div>`,
 };
   function renderProfile(){
@@ -1022,7 +1022,8 @@ setPage=function(page){
   }
   if(page==='messages'||page==='groups'){
     const header=document.querySelector('.message-header');
-    if(header&&!document.querySelector('.messages-topbar'))header.insertAdjacentHTML('beforebegin','<div class="page-topbar messages-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><div class="message-filter"><button class="filter-chip active" data-message-filter="all">All</button><button class="filter-chip" data-message-filter="unread">Unread</button></div><button class="topbar-icon" type="button" aria-label="Filter messages">'+icon('filter')+'</button></div>');
+    if(header&&!document.querySelector('.messages-topbar'))header.insertAdjacentHTML('beforebegin','<div class="page-topbar messages-topbar"><button class="topbar-brand" type="button" data-page="home">evenit</button><strong>Messages</strong><button class="topbar-icon message-filter-trigger" id="message-filter-trigger" type="button" aria-label="Filter messages" aria-haspopup="menu" aria-expanded="false"><span>'+icon('filter')+'</span><i class="message-filter-alert" hidden></i></button></div>');
+    document.querySelector('#message-filter-trigger')?.addEventListener('click',event=>{event.stopPropagation();toggleMessageFilterPanel(event.currentTarget)});
     if(page==='groups')document.querySelector('.msg-tab[data-msg-tab="groups"]')?.click();
     document.querySelector('#open-group-create')?.addEventListener('click',()=>currentUser?document.querySelector('#group-modal')?.classList.add('open'):loginModal?.classList.add('open'));
   }
@@ -1116,7 +1117,7 @@ document.addEventListener('click',e=>{const settings=e.target.closest('[data-set
 function renderSettingsPanel(panel){const content={notifications:{eyebrow:'Your attention',title:'Notifications',body:'Choose the updates that are useful to you.',items:[['Plan activity','Joins, comments, and changes to plans you host'],['Following','New plans from people you follow'],['Follow requests','Requests and approvals for private profiles']]},privacy:{eyebrow:'Your boundaries',title:'Privacy & safety',body:'Your profile privacy is managed from Edit profile. Your college and enrollment information stays private until you choose to use it for a verified event.',items:[['Profile visibility','Public profiles are followed instantly; private profiles require approval.'],['Location sharing','Your approximate location is only used to surface nearby plans.'],['Event verification','College and enrollment details are never displayed publicly.']]},help:{eyebrow:'Need a hand?',title:'Help center',body:'A few answers for making plans feel easy.',items:[['Creating a plan','Set a clear time, place and guest limit so people know what to expect.'],['Joining safely','Review the event details and only share private credentials when an event specifically requests verification.'],['Contact support','Email support@evenit.app and include a screenshot if something is not working.']]}}[panel];if(!content)return;pageView.innerHTML=`<div class="settings-panel"><button class="back-link" id="back-to-settings">← Settings</button><p class="overline">${content.eyebrow}</p><h2>${content.title}</h2><p>${content.body}</p><div class="settings-detail-list">${content.items.map(([title,detail])=>`<article><strong>${title}</strong><span>${detail}</span>${panel==='notifications'?'<label class="settings-switch"><input type="checkbox" checked><i></i></label>':''}</article>`).join('')}</div></div>`;document.querySelector('#back-to-settings').onclick=()=>setPage('settings');}
 
 document.addEventListener('click',e=>{const tab=e.target.closest('.profile-tabs button');if(tab)renderProfileTab(tab)});
-document.addEventListener('click',e=>{const tab=e.target.closest('.msg-tab');if(tab){document.querySelectorAll('.msg-tab').forEach(t=>t.classList.toggle('active',t===tab));document.querySelectorAll('.msg-pane').forEach(p=>p.hidden=p.id!==`msg-${tab.dataset.msgTab}-pane`);}},undefined);
+document.addEventListener('click',e=>{const tab=e.target.closest('.msg-tab');if(tab){document.querySelectorAll('.msg-tab').forEach(t=>{const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));});document.querySelectorAll('.msg-pane').forEach(p=>p.hidden=p.id!==`msg-${tab.dataset.msgTab}-pane`);applyMessageConversationFilter();}},undefined);
 document.querySelectorAll('[data-saved-open]').forEach(button=>button.onclick=()=>{activeSavedCollection='plans';setPage('saved');});
 document.addEventListener('click',e=>{const saved=e.target.closest('[data-saved-collection]');if(!saved)return;activeSavedCollection=saved.dataset.savedCollection;setPage('saved');});
 function renderSavedPage(){pageView.innerHTML=`<div class="page-header saved-header"><p class="overline">Keep it close</p><h2>Saved</h2><p>Plans, people, and groups you want to return to.</p></div><div class="saved-tabs"><button class="${activeSavedCollection==='plans'?'active':''}" data-saved-collection="plans">Plans</button><button class="${activeSavedCollection==='people'?'active':''}" data-saved-collection="people">People</button><button class="${activeSavedCollection==='groups'?'active':''}" data-saved-collection="groups">Groups</button></div><div id="saved-content"></div>`;renderSavedCollection(activeSavedCollection);}
@@ -1202,10 +1203,12 @@ async function openDirectConversation(profile,options={}){
   if(!options.restore)pushAppView({type:'direct-message',profile:{id:profile.id,username:profile.username||null,full_name:profile.full_name||null,avatar_url:profile.avatar_url||null,is_private:Boolean(profile.is_private)}});
   pushNav('messages');showInsightsShell();
   window.evenitActiveGroupId=null;
-  pageView.innerHTML='<div class="direct-message-page"><button class="back-link" id="back-from-direct-message">← Messages</button><div class="direct-message-heading"><img src="'+escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68')+'" alt=""><div><p class="overline">Direct message</p><h2>'+escapeHtml(profile.full_name||profile.username||'Evenit member')+'</h2><p>@'+escapeHtml(profile.username||'member')+'</p></div></div><div class="direct-thread" id="direct-thread"><p>Loading conversation…</p></div><form class="direct-message-form" id="direct-message-form"><input name="body" maxlength="1000" placeholder="Write a message…" required><button class="publish-button" type="submit">Send <span>→</span></button></form></div>';
+  const displayName=escapeHtml(profile.full_name||profile.username||'Evenit member');
+  const avatar=escapeHtml(profile.avatar_url||'https://i.pravatar.cc/100?img=68');
+  pageView.innerHTML='<section class="direct-message-page"><header class="conversation-header"><button class="conversation-back" id="back-from-direct-message" type="button" aria-label="Back to messages">←</button><button class="conversation-person" type="button" data-public-profile-id="'+escapeHtml(profile.id)+'"><span class="conversation-avatar"><img src="'+avatar+'" alt=""><i></i></span><span><strong>'+displayName+'</strong><small>@'+escapeHtml(profile.username||'member')+'</small></span></button><span class="conversation-secure" title="Private conversation">'+icon('lock')+'</span></header><div class="direct-thread" id="direct-thread" aria-live="polite"><div class="conversation-loading">Loading conversation…</div></div><form class="direct-message-form" id="direct-message-form"><input name="body" maxlength="1000" autocomplete="off" aria-label="Message '+displayName+'" placeholder="Message…" required><button type="submit" aria-label="Send message">'+icon('share')+'</button></form></section>';
   document.querySelector('#back-from-direct-message').onclick=goBack;
   const thread=document.querySelector('#direct-thread');
-  const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(!thread.isConnected)return;if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}const atEnd=thread.scrollHeight-thread.scrollTop-thread.clientHeight<80;thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleString()+'</small></article>').join(''):'<p class="direct-message-note">Start the conversation.</p>';if(atEnd)thread.scrollTop=thread.scrollHeight;};
+  const loadThread=async()=>{const {data,error}=await supabase.rpc('get_direct_messages',{p_other_id:profile.id});if(!thread.isConnected)return;if(error){thread.innerHTML='<p class="direct-message-note">'+escapeHtml(error.message)+'</p>';return;}const atEnd=thread.scrollHeight-thread.scrollTop-thread.clientHeight<80;thread.innerHTML=data?.length?data.map(message=>'<article class="direct-bubble '+(message.sender_id===currentUser.id?'mine':'theirs')+'"><p>'+escapeHtml(message.body)+'</p><small>'+new Date(message.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+'</small></article>').join(''):'<div class="direct-message-note"><span>'+icon('messages')+'</span><strong>Start the conversation</strong><small>Messages are private between you and '+displayName+'.</small></div>';if(atEnd)thread.scrollTop=thread.scrollHeight;await supabase.rpc('mark_direct_conversation_read',{p_other_user_id:profile.id});syncMessageUnreadUI();};
   window.refreshEvenitDirectThread=loadThread;
   const directForm=document.querySelector('#direct-message-form');
   await loadThread();
@@ -1857,27 +1860,36 @@ document.querySelector('#nearby-refresh')?.addEventListener('click', loadNearbyP
 async function loadGroups(){
   const list=document.querySelector('#groups-list');
   const rail=document.querySelector('#rail-groups');
+  const tabCount=document.querySelector('[data-msg-tab="groups"] small');
   if(!supabase||!currentUser){
-    if(list)list.innerHTML='<div class="nearby-empty" style="padding:22px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff">Log in to see your groups.</div>';
+    messageUnreadState.groups=0;
+    if(tabCount)tabCount.textContent='0';
+    if(list)list.innerHTML='<div class="message-empty-state"><span>'+icon('lock')+'</span><strong>Private groups stay private</strong><p>Log in to see the groups you belong to.</p></div>';
     if(rail) rail.innerHTML='<div class="nearby-empty" style="padding:14px;text-align:center;color:#6E6E73;font-size:11px;border:1px dashed #E8E8ED;border-radius:14px;background:#fff">Log in to see groups.</div>';
+    syncMessageUnreadUI();
     return;
   }
-  if(list&&!list.dataset.loaded)list.innerHTML='<div style="padding:20px;text-align:center;color:#6E6E73">Loading groups...</div>';
+  if(list&&!list.dataset.loaded)list.innerHTML='<div class="message-loading">Loading groups…</div>';
   const viewerId=currentUser.id;
   const {data,error}=await supabase.rpc('get_group_conversations');
   if(viewerId!==currentUser?.id)return;
   if(list)list.dataset.loaded='true';
-  if(error){ if(list)list.innerHTML=`<div style="padding:16px;color:#b00020">${escapeHtml(error.message)}</div>`; return; }
+  if(error){ if(list)list.innerHTML=`<div class="message-load-error">${escapeHtml(error.message)}</div>`; return; }
+  const groups=data||[];
+  messageUnreadState.groups=groups.reduce((total,group)=>total+Number(group.unread_count||0),0);
+  if(tabCount)tabCount.textContent=String(groups.length);
   if(!data||!data.length){
-    if(list)list.innerHTML='<div class="nearby-empty" style="padding:28px;text-align:center;color:#6E6E73;border:1px dashed #E8E8ED;border-radius:16px;background:#fff"><div style="font-size:28px;margin-bottom:8px">◎</div><div style="font-weight:600;color:#1D1D1F">No groups yet</div><div style="font-size:12px;margin-top:6px">Create a private circle and add the people who belong in it.</div><button id="empty-create-group" class="publish-button" style="margin:16px auto 0;border-radius:999px;width:auto">＋ Create group</button></div>';
+    if(list)list.innerHTML='<div class="message-empty-state"><span>'+icon('messages')+'</span><strong>No groups yet</strong><p>Create a private group, then add the people who belong in it.</p><button id="empty-create-group" class="group-create-button" type="button">'+icon('plus')+'<span>Create group</span></button></div>';
     document.querySelector('#empty-create-group')?.addEventListener('click', ()=>document.querySelector('#group-modal')?.classList.add('open'));
     if(rail) rail.innerHTML='<div class="nearby-empty" style="padding:14px;text-align:center;color:#6E6E73;font-size:11px;border:1px dashed #E8E8ED;border-radius:14px;background:#fff">No groups yet.<br><small><a href="#messages" data-page="messages" style="color:#5E5CE6;font-weight:600;text-decoration:none">Create one</a></small></div>';
+    syncMessageUnreadUI();
     return;
   }
   if(list)list.innerHTML=data.map(g=>`
-    <button class="group-card" data-open-group="${escapeHtml(g.id)}" style="width:100%;background:#fff;border:1px solid #E8E8ED;border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,0.04);text-align:left;cursor:pointer">
-      <div style="min-width:0;flex:1"><div style="display:flex;gap:8px;align-items:center"><strong style="font:600 15px -apple-system,sans-serif;letter-spacing:-0.02em;overflow-wrap:anywhere">${escapeHtml(g.name)}</strong><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#5E5CE6;background:#F2F0FF;border-radius:999px;padding:4px 8px">Private</span></div><div style="font-size:12px;color:#6E6E73;margin-top:4px;line-height:1.4;overflow-wrap:anywhere">${escapeHtml(g.last_body||g.description||'No messages yet')}</div><div style="font-size:11px;color:#6E6E73;margin-top:6px">${g.member_count}/${g.max_members} members · ${escapeHtml(g.viewer_role)}</div></div>
-      <small style="color:#6E6E73;font-size:10px;white-space:nowrap">${g.last_at?escapeHtml(formatPostTime(g.last_at)):'New'}</small>
+    <button class="group-card ${Number(g.unread_count||0)>0?'has-unread':''}" type="button" data-open-group="${escapeHtml(g.id)}" data-unread-count="${Number(g.unread_count||0)}">
+      <span class="group-card-avatar">${escapeHtml(g.name.slice(0,2).toUpperCase())}<i>${icon('lock')}</i></span>
+      <span class="group-card-copy"><span class="group-card-title"><strong>${escapeHtml(g.name)}</strong><em>${g.member_count} members</em></span><span class="group-card-preview">${g.last_sender_id===currentUser.id?'You: ':''}${escapeHtml(g.last_body||g.description||'No messages yet')}</span><small>${escapeHtml(g.viewer_role==='owner'?'You manage this group':'Private group')}</small></span>
+      <span class="message-card-meta"><time>${g.last_at?escapeHtml(formatPostTime(g.last_at)):'New'}</time>${Number(g.unread_count||0)>0?`<b class="message-unread-badge" aria-label="${Number(g.unread_count)} unread messages">${Number(g.unread_count)>99?'99+':Number(g.unread_count)}</b>`:''}</span>
     </button>
   `).join('');
   if(rail){
@@ -1886,6 +1898,8 @@ async function loadGroups(){
   }
   list?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>openGroup(b.dataset.openGroup));
   rail?.querySelectorAll('[data-open-group]').forEach(b=>b.onclick=()=>{ setPage('groups'); setTimeout(()=>openGroup(b.dataset.openGroup), 300); });
+  syncMessageUnreadUI();
+  applyMessageConversationFilter();
 }
 async function openGroup(groupId,{restore=false}={}){
   if(!supabase||!currentUser){loginModal?.classList.add('open');return;}
@@ -1912,13 +1926,15 @@ async function openGroup(groupId,{restore=false}={}){
     setPage('messages');
     return;
   }
+  await supabase.rpc('mark_group_conversation_read',{p_group_id:groupId});
   const title=group.name||'Group';
   const canManage=['owner','admin'].includes(me.role);
   const visibleMembers=members.slice(0,7);
   const memberSummary=visibleMembers.map(member=>`<span class="group-member-chip" title="${escapeHtml(member.full_name||member.username||'Member')}"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><b>${escapeHtml((member.full_name||member.username||'M').slice(0,1))}</b></span>`).join('')+(members.length>visibleMembers.length?`<span class="group-member-more">+${members.length-visibleMembers.length}</span>`:'');
   const membersHtml=members.map(member=>`<div class="group-member-row"><img src="${escapeHtml(member.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><strong>${escapeHtml(member.full_name||member.username||'Member')}</strong><small>@${escapeHtml(member.username||'member')} · ${escapeHtml(member.role)}</small></div>${canManage&&member.user_id!==currentUser.id&&member.role!=='owner'?`<button type="button" class="group-member-remove" data-remove-group-member="${escapeHtml(member.user_id)}">Remove</button>`:''}</div>`).join('');
-  pageView.innerHTML=`<section class="insights-page group-chat-page" data-group-thread="${escapeHtml(groupId)}"><button class="back-link" id="back-from-group">← Messages</button><div class="insights-header"><div><p class="overline">Private group</p><h2>${escapeHtml(title)}</h2><p style="color:#6E6E73;font-size:12px">${escapeHtml(group.description||'Only added members can read and reply here.')}</p></div><span style="background:#F2F0FF;color:#5E5CE6;border-radius:999px;padding:8px 12px;font:700 11px -apple-system,sans-serif">Private</span></div><section class="group-members-panel"><div class="group-members-heading"><div><strong>${members.length}/${group.max_members} members</strong><small>Only these profiles can see this group.</small></div><div class="group-member-chips">${memberSummary}</div></div>${canManage?`<details class="group-member-manager"><summary>Manage members <span>⌄</span></summary><div class="group-invite-control"><label for="group-add-search">Add a profile</label><input id="group-add-search" autocomplete="off" placeholder="Search name or @username" maxlength="80"><div id="group-invite-results" class="group-invite-results" aria-live="polite"></div></div><div class="group-member-list">${membersHtml}</div></details>`:''}</section><div class="group-thread" id="group-messages-${escapeHtml(groupId)}">${!messages||!messages.length?'<div class="group-thread-empty">No messages yet. Start the conversation.</div>':messages.map(message=>`<article class="group-bubble ${message.user_id===currentUser.id?'mine':''}"><div class="group-bubble-author">${message.user_id===currentUser.id?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${formatPostTime(message.created_at)}</small></article>`).join('')}</div><form id="group-message-form" class="group-message-form"><input id="group-message-input" placeholder="Message ${escapeHtml(title)}" maxlength="1000" required><button type="submit" class="publish-button">Send</button></form></section>`;
+  pageView.innerHTML=`<section class="group-chat-page" data-group-thread="${escapeHtml(groupId)}"><header class="conversation-header group-conversation-header"><button class="conversation-back" id="back-from-group" type="button" aria-label="Back to messages">←</button><span class="group-conversation-avatar">${escapeHtml(title.slice(0,2).toUpperCase())}</span><span class="group-conversation-copy"><strong>${escapeHtml(title)}</strong><small>${members.length} members · Private</small></span><button class="group-details-toggle" type="button" aria-label="Group details" aria-expanded="false">${icon('more')}</button></header><section class="group-details-panel" hidden><div><strong>${escapeHtml(group.description||'A private conversation for this group.')}</strong><small>Only added members can read and reply.</small></div><div class="group-member-chips">${memberSummary}</div>${canManage?`<details class="group-member-manager"><summary>Manage members <span>⌄</span></summary><div class="group-invite-control"><label for="group-add-search">Add a profile</label><input id="group-add-search" autocomplete="off" placeholder="Search name or @username" maxlength="80"><div id="group-invite-results" class="group-invite-results" aria-live="polite"></div></div><div class="group-member-list">${membersHtml}</div></details>`:''}</section><div class="group-thread" id="group-messages-${escapeHtml(groupId)}">${!messages||!messages.length?'<div class="group-thread-empty"><span>'+icon('messages')+'</span><strong>Start the group conversation</strong><small>Everyone added to this group can read and reply.</small></div>':messages.map(message=>`<article class="group-bubble ${message.user_id===currentUser.id?'mine':''}"><div class="group-bubble-author">${message.user_id===currentUser.id?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${new Date(message.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</small></article>`).join('')}</div><form id="group-message-form" class="group-message-form"><input id="group-message-input" autocomplete="off" aria-label="Message ${escapeHtml(title)}" placeholder="Message ${escapeHtml(title)}" maxlength="1000" required><button type="submit" aria-label="Send message">${icon('share')}</button></form></section>`;
   document.querySelector('#back-from-group').onclick=goBack;
+  document.querySelector('.group-details-toggle')?.addEventListener('click',event=>{const panel=document.querySelector('.group-details-panel');const open=panel.hidden;panel.hidden=!open;event.currentTarget.setAttribute('aria-expanded',String(open));event.currentTarget.classList.toggle('active',open);});
   const groupPage=pageView.querySelector('[data-group-thread]');
   const thread=groupPage.querySelector('.group-thread');
   const input=groupPage.querySelector('#group-message-input');
@@ -1951,6 +1967,7 @@ async function openGroup(groupId,{restore=false}={}){
       const nearBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<80;
       thread.innerHTML=result.data?.length?result.data.map(message=>`<article class="group-bubble ${message.user_id===viewerId?'mine':''}"><div class="group-bubble-author">${message.user_id===viewerId?'You':escapeHtml(message.full_name||message.username||'Member')}</div><p>${escapeHtml(message.body)}</p><small>${formatPostTime(message.created_at)}</small></article>`).join(''):'<div class="group-thread-empty">No messages yet. Start the conversation.</div>';
       if(nearBottom)thread.scrollTop=thread.scrollHeight;
+      await supabase.rpc('mark_group_conversation_read',{p_group_id:groupId});
     }catch(error){if(groupPage.isConnected)showToast(error.message||'Could not refresh messages.');}
     finally{
       refreshing=false;
@@ -2028,36 +2045,110 @@ document.querySelector('#group-form')?.addEventListener('submit', async e=>{
   await loadGroups();
   if(data)openGroup(data);
 });
+const messageUnreadState={direct:0,groups:0};
+let activeMessageFilter='all';
+async function refreshMessageUnreadState(){
+  if(!supabase||!currentUser){messageUnreadState.direct=0;messageUnreadState.groups=0;syncMessageUnreadUI();return;}
+  const viewerId=currentUser.id;
+  const [directResult,groupResult]=await Promise.all([
+    supabase.rpc('get_direct_message_inbox'),
+    supabase.rpc('get_group_conversations')
+  ]);
+  if(currentUser?.id!==viewerId)return;
+  if(!directResult.error)messageUnreadState.direct=(directResult.data||[]).reduce((total,item)=>total+Number(item.unread_count||0),0);
+  if(!groupResult.error)messageUnreadState.groups=(groupResult.data||[]).reduce((total,item)=>total+Number(item.unread_count||0),0);
+  syncMessageUnreadUI();
+}
+function syncMessageUnreadUI(){
+  const total=messageUnreadState.direct+messageUnreadState.groups;
+  const filterTotal=document.querySelector('#message-unread-total');
+  if(filterTotal)filterTotal.textContent=total>99?'99+':String(total);
+  document.querySelectorAll('.message-filter-alert').forEach(mark=>mark.hidden=total===0);
+  document.querySelectorAll('[data-page="messages"]').forEach(link=>{
+    link.classList.toggle('has-message-unread',total>0);
+    let mark=link.querySelector('.nav-message-unread');
+    if(total>0&&!mark){mark=document.createElement('i');mark.className='nav-message-unread';mark.setAttribute('aria-label',`${total} unread messages`);link.appendChild(mark);}
+    if(mark){mark.hidden=total===0;mark.setAttribute('aria-label',`${total} unread messages`);}
+  });
+  document.querySelector('#mobile-header-action')?.classList.toggle('has-message-unread',total>0);
+}
+function applyMessageConversationFilter(){
+  document.querySelectorAll('#msg-primary-pane .message,#msg-groups-pane .group-card').forEach(card=>{
+    card.hidden=activeMessageFilter==='unread'&&Number(card.dataset.unreadCount||0)===0;
+  });
+  document.querySelectorAll('#msg-primary-pane .message-list,#msg-groups-pane .groups-list').forEach(list=>{
+    list.querySelector('.message-filter-empty')?.remove();
+    const cards=[...list.querySelectorAll('.message,.group-card')];
+    if(activeMessageFilter==='unread'&&cards.length&&!cards.some(card=>!card.hidden)){
+      list.insertAdjacentHTML('beforeend','<div class="message-filter-empty"><span>'+icon('messages')+'</span><strong>No unread messages</strong><small>You are all caught up here.</small></div>');
+    }
+  });
+}
+function setMessageConversationFilter(filter){
+  activeMessageFilter=filter==='unread'?'unread':'all';
+  document.querySelectorAll('[data-message-filter]').forEach(button=>{
+    const selected=button.dataset.messageFilter===activeMessageFilter;
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-checked',String(selected));
+  });
+  applyMessageConversationFilter();
+  const panel=document.querySelector('#message-filter-panel');
+  if(panel)panel.hidden=true;
+  document.querySelectorAll('.message-filter-trigger,#mobile-header-action').forEach(button=>button.setAttribute('aria-expanded','false'));
+}
+function toggleMessageFilterPanel(trigger){
+  const panel=document.querySelector('#message-filter-panel');
+  if(!panel)return;
+  const willOpen=panel.hidden;
+  panel.hidden=!willOpen;
+  document.querySelectorAll('.message-filter-trigger,#mobile-header-action').forEach(button=>button.setAttribute('aria-expanded',String(willOpen)));
+  if(willOpen)panel.querySelector(`[data-message-filter="${activeMessageFilter}"]`)?.focus();
+}
+document.addEventListener('click',event=>{
+  const option=event.target.closest('[data-message-filter]');
+  if(option){event.stopPropagation();setMessageConversationFilter(option.dataset.messageFilter);return;}
+  const panel=document.querySelector('#message-filter-panel');
+  if(panel&&!panel.hidden&&!event.target.closest('#message-filter-panel,.message-filter-trigger,#mobile-header-action')){
+    panel.hidden=true;
+    document.querySelectorAll('.message-filter-trigger,#mobile-header-action').forEach(button=>button.setAttribute('aria-expanded','false'));
+  }
+});
 async function loadMessageInbox(){
   const list=document.querySelector('#msg-primary-pane .message-list');
   const count=document.querySelector('[data-msg-tab="primary"] small');
   if(!list)return;
   document.querySelector('#msg-primary-pane > .message-note')?.remove();
   if(!supabase||!currentUser){
-    list.innerHTML='<div class="empty-message">Log in to see your conversations.</div>';
+    messageUnreadState.direct=0;
+    list.innerHTML='<div class="message-empty-state"><span>'+icon('messages')+'</span><strong>Your conversations live here</strong><p>Log in to see and send private messages.</p></div>';
     if(count)count.textContent='0';
+    syncMessageUnreadUI();
     return;
   }
-  if(!list.dataset.loaded)list.innerHTML='<div class="empty-message">Loading conversations…</div>';
+  if(!list.dataset.loaded)list.innerHTML='<div class="message-loading">Loading conversations…</div>';
   const viewerId=currentUser.id;
   const {data,error}=await supabase.rpc('get_direct_message_inbox');
   if(!list.isConnected||viewerId!==currentUser?.id)return;
   list.dataset.loaded='true';
   if(error){
-    list.innerHTML=`<div class="empty-message">Messages could not load.<br><span>${escapeHtml(error.message)}</span></div>`;
+    list.innerHTML=`<div class="message-load-error">Messages could not load.<br><span>${escapeHtml(error.message)}</span></div>`;
     if(count)count.textContent='0';
     return;
   }
   if(count)count.textContent=String(data?.length||0);
+  messageUnreadState.direct=(data||[]).reduce((total,conversation)=>total+Number(conversation.unread_count||0),0);
   if(!data?.length){
-    list.innerHTML='<div class="message-note"><span>✦</span><div><strong>No conversations yet</strong><p>Open a public profile and choose Message to start a private chat.</p></div></div>';
+    list.innerHTML='<div class="message-empty-state"><span>'+icon('messages')+'</span><strong>No conversations yet</strong><p>Open a public profile and choose Message to start a private chat.</p></div>';
+    syncMessageUnreadUI();
     return;
   }
-  list.innerHTML=data.map(conversation=>`<button class="message" type="button" data-open-direct="${escapeHtml(conversation.other_id)}"><img src="${escapeHtml(conversation.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><div><strong>${escapeHtml(conversation.full_name||conversation.username||'Evenit member')}</strong><p>${conversation.last_sender_id===currentUser.id?'You: ':''}${escapeHtml(conversation.last_body||'')}</p></div><small>${escapeHtml(formatPostTime(conversation.last_at))}</small></button>`).join('');
+  list.innerHTML=data.map(conversation=>{const unread=Number(conversation.unread_count||0);return `<button class="message ${unread?'has-unread':''}" type="button" data-open-direct="${escapeHtml(conversation.other_id)}" data-unread-count="${unread}"><span class="message-avatar"><img src="${escapeHtml(conversation.avatar_url||'https://i.pravatar.cc/100?img=68')}" alt=""><i></i></span><span class="message-copy"><strong>${escapeHtml(conversation.full_name||conversation.username||'Evenit member')}</strong><p>${conversation.last_sender_id===currentUser.id?'<em>You:</em> ':''}${escapeHtml(conversation.last_body||'')}</p></span><span class="message-card-meta"><time>${escapeHtml(formatPostTime(conversation.last_at))}</time>${unread?`<b class="message-unread-badge" aria-label="${unread} unread messages">${unread>99?'99+':unread}</b>`:''}</span></button>`;}).join('');
   list.querySelectorAll('[data-open-direct]').forEach(button=>button.onclick=()=>{
     const conversation=data.find(item=>item.other_id===button.dataset.openDirect);
     if(conversation)openDirectConversation({id:conversation.other_id,username:conversation.username,full_name:conversation.full_name,avatar_url:conversation.avatar_url,is_private:false});
   });
+  syncMessageUnreadUI();
+  applyMessageConversationFilter();
 }
 function loadGroupMessagesPreview(){ loadMessageInbox(); }
 
@@ -2317,11 +2408,13 @@ function scheduleEvenitLiveRefresh(kind){
     if(kind==='notifications'&&activePage==='notifications')renderNotifications();
     if(kind==='messages'){
       if(pageView?.querySelector('.direct-message-page')&&typeof window.refreshEvenitDirectThread==='function')window.refreshEvenitDirectThread();
-      else if(activePage==='messages'){loadMessageInbox();showToast('You have a new message');}
+      else if(activePage==='messages')loadMessageInbox();
+      else refreshMessageUnreadState();
     }
     if(kind==='groups'){
       if(pageView?.querySelector('[data-group-thread]')&&window.evenitActiveGroupId)window.refreshEvenitGroupThread?.();
       else if(activePage==='messages'||activePage==='groups')loadGroups();
+      else refreshMessageUnreadState();
     }
   },260));
 }
@@ -2341,15 +2434,15 @@ function subscribeToEvenitLiveUpdates(){
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_verification_access',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('plans'))
     .on('postgres_changes',{event:'*',schema:'public',table:'plan_aftermath_posts'},()=>scheduleEvenitLiveRefresh('aftermath'))
     .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('notifications'))
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'sender_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'direct_messages',filter:'recipient_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
+    .on('postgres_changes',{event:'*',schema:'public',table:'direct_messages',filter:'sender_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('messages'))
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'group_messages'},()=>scheduleEvenitLiveRefresh('groups'))
     .on('postgres_changes',{event:'*',schema:'public',table:'group_members',filter:'user_id=eq.'+currentUser.id},()=>scheduleEvenitLiveRefresh('groups'))
     .subscribe();
 }
 if(supabase){
-  supabase.auth.getSession().then(({data})=>{if(data.session?.user){loadEntryPasses();subscribeToEvenitLiveUpdates();}});
-  supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;if(currentUser)subscribeToEvenitLiveUpdates();else if(evenitLiveChannel){supabase.removeChannel(evenitLiveChannel);evenitLiveChannel=null;}});
+  supabase.auth.getSession().then(({data})=>{if(data.session?.user){loadEntryPasses();subscribeToEvenitLiveUpdates();refreshMessageUnreadState();}});
+  supabase.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;if(currentUser){subscribeToEvenitLiveUpdates();refreshMessageUnreadState();}else{refreshMessageUnreadState();if(evenitLiveChannel){supabase.removeChannel(evenitLiveChannel);evenitLiveChannel=null;}}});
 }
 let evenitRefreshing=false;
 let evenitRefreshInterval=null;
@@ -2440,7 +2533,6 @@ renderPosts();
 // The mobile app bar has one purpose per page; it never duplicates controls
 // already available below it.
 const baseUpdateMobileHeader=updateMobileHeader;
-let mobileMessageFilter='all';
 updateMobileHeader=function(page){
   baseUpdateMobileHeader(page);
   const activePage=page||document.querySelector('[data-page].active')?.dataset.page||'home';
@@ -2458,6 +2550,9 @@ updateMobileHeader=function(page){
   }else if(activePage==='messages'||activePage==='groups'){
     action.innerHTML='<span>'+icon('filter')+'</span>';
     action.setAttribute('aria-label','Filter messages');
+    action.setAttribute('aria-haspopup','menu');
+    action.setAttribute('aria-expanded','false');
+    action.classList.toggle('has-message-unread',messageUnreadState.direct+messageUnreadState.groups>0);
   }else{
     action.innerHTML='<span>'+icon('heart')+'</span>';
     action.setAttribute('aria-label','Open notifications');
@@ -2472,9 +2567,7 @@ document.querySelector('#mobile-header-action')?.addEventListener('click',()=>{
     return;
   }
   if(page==='messages'||page==='groups'){
-    mobileMessageFilter=mobileMessageFilter==='all'?'unread':'all';
-    document.querySelectorAll('.message').forEach((message,index)=>message.hidden=mobileMessageFilter==='unread'&&index>0);
-    showToast(mobileMessageFilter==='unread'?'Showing unread messages':'Showing all messages');
+    toggleMessageFilterPanel(document.querySelector('#mobile-header-action'));
     return;
   }
   setPage('notifications');

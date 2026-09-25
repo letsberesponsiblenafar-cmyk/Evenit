@@ -35,7 +35,7 @@ function liveHarness({page='messages',group=false,direct=false}={}){
     renderNotifications:()=>calls.push('notifications'),
     loadMessageInbox:()=>calls.push('inbox'),
     loadGroups:()=>calls.push('groups'),
-    showToast:()=>calls.push('toast')
+    refreshMessageUnreadState:()=>calls.push('unread-state')
   });
   vm.runInContext(extract('const evenitLiveRefreshTimers=', 'function subscribeToEvenitLiveUpdates('),context);
   return {calls,schedule:kind=>context.scheduleEvenitLiveRefresh(kind),flush(){for(const callback of [...pending.values()])callback()}};
@@ -44,7 +44,7 @@ function liveHarness({page='messages',group=false,direct=false}={}){
 test('A burst of plan, direct-message and group updates does not discard other refreshes',()=>{
   const app=liveHarness();
   app.schedule('plans');app.schedule('messages');app.schedule('groups');app.flush();
-  assert.deepEqual(app.calls,['plans','inbox','toast','groups']);
+  assert.deepEqual(app.calls,['plans','inbox','groups']);
 });
 
 test('Repeated events debounce only their own update category',()=>{

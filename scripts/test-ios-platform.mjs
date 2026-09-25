@@ -15,7 +15,7 @@ test('Capacitor iOS uses the shared Evenit app and synchronized mobile bundle',(
   assert.match(pkg.scripts['mobile:sync:ios'],/cap sync ios/);
   assert.match(pkg.scripts['mobile:sync'],/cap sync android && npx cap sync ios/);
   assert.equal(capacitor.appId,'app.evenit.mobile');
-  assert.match(capacitor.server.url,/letsberesponsiblenafar-cmyk\.github\.io\/Evenit/);
+  assert.match(capacitor.server.url,/evenit\.vercel\.app/);
   assert.equal(capacitor.ios.preferredContentMode,'mobile');
   assert.equal(capacitor.ios.contentInset,'never');
   assert.ok(existsSync(new URL('ios/App/App.xcodeproj/project.pbxproj',root)));

@@ -7,6 +7,7 @@ $privateFonts.AddFontFile($fontPath)
 $brandFamily = $privateFonts.Families[0]
 $purple = [System.Drawing.ColorTranslator]::FromHtml('#54259A')
 $cream = [System.Drawing.ColorTranslator]::FromHtml('#F7F4FB')
+$white = [System.Drawing.ColorTranslator]::FromHtml('#FFFFFF')
 
 function New-BrandArtwork {
     param(
@@ -15,8 +16,11 @@ function New-BrandArtwork {
         [Parameter(Mandatory = $true)][int]$Height,
         [Parameter(Mandatory = $true)][string]$Text,
         [Parameter(Mandatory = $true)][double]$FontScale,
+        [System.Drawing.Color]$BackgroundColor = $purple,
+        [System.Drawing.Color]$ForegroundColor = $cream,
         [switch]$Transparent,
-        [switch]$RoundBackground
+        [switch]$RoundBackground,
+        [switch]$Thicken
     )
 
     $pixelFormat = if ($Transparent) {
@@ -33,24 +37,31 @@ function New-BrandArtwork {
     if ($Transparent) {
         $graphics.Clear([System.Drawing.Color]::Transparent)
     } else {
-        $graphics.Clear($purple)
+        $graphics.Clear($BackgroundColor)
     }
     if ($RoundBackground) {
         $graphics.Clear([System.Drawing.Color]::Transparent)
-        $backgroundBrush = New-Object System.Drawing.SolidBrush($purple)
+        $backgroundBrush = New-Object System.Drawing.SolidBrush($BackgroundColor)
         $graphics.FillEllipse($backgroundBrush, 0, 0, $Width, $Height)
         $backgroundBrush.Dispose()
     }
 
     $fontSize = [single]([Math]::Min($Width, $Height) * $FontScale)
     $font = New-Object System.Drawing.Font($brandFamily, $fontSize, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-    $brush = New-Object System.Drawing.SolidBrush($cream)
+    $brush = New-Object System.Drawing.SolidBrush($ForegroundColor)
     $format = New-Object System.Drawing.StringFormat
     $format.Alignment = [System.Drawing.StringAlignment]::Center
     $format.LineAlignment = [System.Drawing.StringAlignment]::Center
     $format.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
     $verticalAdjustment = if ($Text -eq 'evenit') { -0.035 * $Height } else { -0.025 * $Height }
     $rect = New-Object System.Drawing.RectangleF(0, $verticalAdjustment, $Width, $Height)
+    if ($Thicken) {
+        $shift = [single]([Math]::Max(1, [Math]::Min($Width, $Height) * 0.012))
+        $leftRect = New-Object System.Drawing.RectangleF(-$shift, $verticalAdjustment, $Width, $Height)
+        $rightRect = New-Object System.Drawing.RectangleF($shift, $verticalAdjustment, $Width, $Height)
+        $graphics.DrawString($Text, $font, $brush, $leftRect, $format)
+        $graphics.DrawString($Text, $font, $brush, $rightRect, $format)
+    }
     $graphics.DrawString($Text, $font, $brush, $rect, $format)
     $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
 
@@ -64,16 +75,16 @@ function New-BrandArtwork {
 function New-IconSet {
     $webRoot = Join-Path $projectRoot 'assets\brand'
     New-Item -ItemType Directory -Force -Path $webRoot | Out-Null
-    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-32.png') -Width 32 -Height 32 -Text 'e' -FontScale 0.82
-    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-192.png') -Width 192 -Height 192 -Text 'e' -FontScale 0.82
-    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-512.png') -Width 512 -Height 512 -Text 'e' -FontScale 0.82
-    New-BrandArtwork -Path (Join-Path $webRoot 'apple-touch-icon.png') -Width 180 -Height 180 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-32.png') -Width 32 -Height 32 -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-192.png') -Width 192 -Height 192 -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
+    New-BrandArtwork -Path (Join-Path $webRoot 'favicon-512.png') -Width 512 -Height 512 -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
+    New-BrandArtwork -Path (Join-Path $webRoot 'apple-touch-icon.png') -Width 180 -Height 180 -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
     New-BrandArtwork -Path (Join-Path $webRoot 'evenit-wordmark.png') -Width 1200 -Height 360 -Text 'evenit' -FontScale 0.40
 }
 
 function New-IosArtwork {
     $assetRoot = Join-Path $projectRoot 'ios\App\App\Assets.xcassets'
-    New-BrandArtwork -Path (Join-Path $assetRoot 'AppIcon.appiconset\AppIcon-512@2x.png') -Width 1024 -Height 1024 -Text 'e' -FontScale 0.82
+    New-BrandArtwork -Path (Join-Path $assetRoot 'AppIcon.appiconset\AppIcon-512@2x.png') -Width 1024 -Height 1024 -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
     $splashRoot = Join-Path $assetRoot 'Splash.imageset'
     @('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png') | ForEach-Object {
         New-BrandArtwork -Path (Join-Path $splashRoot $_) -Width 2732 -Height 2732 -Text 'evenit' -FontScale 0.18
@@ -94,19 +105,19 @@ function New-AndroidArtwork {
         $existing = [System.Drawing.Image]::FromFile($_.FullName)
         $size = $existing.Width
         $existing.Dispose()
-        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -Thicken
     }
     Get-ChildItem $resourceRoot -Recurse -File -Filter 'ic_launcher_round.png' | ForEach-Object {
         $existing = [System.Drawing.Image]::FromFile($_.FullName)
         $size = $existing.Width
         $existing.Dispose()
-        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82 -RoundBackground
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.82 -BackgroundColor $white -ForegroundColor $purple -RoundBackground -Thicken
     }
     Get-ChildItem $resourceRoot -Recurse -File -Filter 'ic_launcher_foreground.png' | ForEach-Object {
         $existing = [System.Drawing.Image]::FromFile($_.FullName)
         $size = $existing.Width
         $existing.Dispose()
-        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.58 -Transparent
+        New-BrandArtwork -Path $_.FullName -Width $size -Height $size -Text 'e' -FontScale 0.58 -ForegroundColor $purple -Transparent -Thicken
     }
 }
 
