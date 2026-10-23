@@ -53,3 +53,14 @@ The earlier access review also found separate profile-administrator and private-
 - Local test fixture: `node scripts/preview-fixture.mjs`, then open `http://127.0.0.1:4174`. It replaces Supabase with synthetic accounts/events and does not write to the database. Fixtures reset on page reload; saved/hidden browser preferences persist.
 
 Native camera, actual email delivery, and native-device builds were not exercised by this change.
+
+## Minimal interface follow-up — 2026-10-24
+
+- Discover opens on Aftermath on every visit. Upcoming plans remain an optional secondary view; Home keeps the event feed.
+- Universal search has Events, Profiles, and Aftermath tabs with counts, keyboard navigation, empty/error states, and cancellation of stale results.
+- Messages adds conversation search and a profile picker for new conversations. Drafts survive navigation within the session and clear on account changes. Chat composers fit above the mobile dock.
+- Removed decorative arrows, stars, selection ticks, redundant headings, false presence dots, and unnecessary divider lines. Reduced nested card framing and editor spacing.
+- Corrected light/dark surfaces and contrast in Discover, profile cards, messaging, the editor, navigation, and sidebars. The saved theme is applied before styles load.
+- Page transitions cancel stale searches and guard delayed event, message, group, and notification responses. Workspace forms return to their host before another page renders.
+- Validation: 48 automated tests pass, including two asynchronous search regressions. Synthetic browser checks covered desktop, 390px and 320px widths; theme switching; default reset; search categories; message picker, back navigation and retained drafts. No horizontal overflow or browser errors were observed in these checks.
+- This follow-up changes frontend assets only; no Supabase migration is required.

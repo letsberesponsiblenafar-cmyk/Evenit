@@ -13,7 +13,7 @@
   function clearEdit(){
     editing=null;dirty=false;delete form.dataset.editPlanId;note.hidden=true;capacityLabel.hidden=true;
     app.workspaceDefinitions.plan.surface.setAttribute('aria-label','Create a plan.');
-    app.workspaceDefinitions.plan.label='Create plan';submitButton().innerHTML='Create plan <span>→</span>';setStatus('');
+    app.workspaceDefinitions.plan.label='Create plan';submitButton().innerHTML='Create plan ';setStatus('');
   }
   window.prepareEventCreate=()=>{opening++;if(editing){form.reset();clearEdit();}};
   window.openEventEditor=async function(planId){
@@ -38,7 +38,7 @@
       editorHistory={state:window.history.state,url:window.location.href};
       app.workspaceDefinitions.plan.surface.setAttribute('aria-label','Edit event');
       const heading=app.pageView.querySelector('.workspace-bar strong');if(heading)heading.textContent='Edit event';
-      submitButton().innerHTML='Save changes <span>✓</span>';
+      submitButton().innerHTML='Save changes ';
       form.elements.title.focus();
     }catch(error){app.showToast(error.message||'The event editor could not load.');}
   };
@@ -73,7 +73,7 @@
       // On an unknown network outcome keep uploaded assets; they may be in use.
       if(uploadedPath&&!committed&&error.code)await app.supabase.storage.from('plan-covers').remove([uploadedPath]);
       setStatus(committed?'Your event was saved. Reopen Insights to see the latest details.':error.message||'Could not save. Your changes are still here. Try again.',true);
-    }finally{saving=false;form.removeAttribute('aria-busy');submitButton().disabled=false;submitButton().innerHTML=editing?'Save changes <span>✓</span>':'Create plan <span>→</span>';}
+    }finally{saving=false;form.removeAttribute('aria-busy');submitButton().disabled=false;submitButton().innerHTML=editing?'Save changes ':'Create plan ';}
   };
   let replaying=false;
   window.addEventListener('click',async event=>{

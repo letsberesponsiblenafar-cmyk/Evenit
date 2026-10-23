@@ -120,7 +120,7 @@
     if(!basics||!coverPicker||!firstActions||!previewPanel||!layout)return {showDetails:()=>{}};
     const detailSections=[...form.querySelectorAll(':scope > fieldset.composer-section')];
     const next=firstActions.querySelector('.publish-button');
-    next.type='button';next.id='next-plan-cover';next.innerHTML='Next <span>→</span>';
+    next.type='button';next.id='next-plan-cover';next.innerHTML='Next ';
     firstActions.querySelector('p').innerHTML='<span class="pulse-dot"></span>Choose a cover and preview your plan next.';
     const coverStep=document.createElement('section');
     coverStep.className='composer-cover-step';
@@ -128,7 +128,7 @@
     coverStep.append(coverPicker);
     const reviewActions=document.createElement('div');
     reviewActions.className='composer-review-actions';
-    reviewActions.innerHTML='<button type="button" class="composer-back-button" id="back-to-plan-details">← Plan details</button><button class="publish-button" type="submit">Create plan <span>→</span></button>';
+    reviewActions.innerHTML='<button type="button" class="composer-back-button" id="back-to-plan-details">Plan details</button><button class="publish-button" type="submit">Create plan </button>';
     coverStep.append(reviewActions);
     firstActions.after(coverStep);
     let activeSlide='details';

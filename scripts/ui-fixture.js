@@ -8,6 +8,8 @@
     {id:'20000000-0000-0000-0000-000000000001',user_id:owner,title:'Golden hour picnic',tagline:'Good food, new friends, and a little fresh air.',location:'Riverside Park',starts_at:new Date(Date.now()+2*day).toISOString(),caption:'Bring a blanket and something to share. We will meet at the park entrance before walking down to the river.',category:'Social',cover_style:'aurora',image_url:null,capacity:12,created_at:new Date().toISOString(),requires_college_verification:false,latitude:34,longitude:74},
     {id:'20000000-0000-0000-0000-000000000002',user_id:other,title:'Sunday sketch walk',tagline:'See your neighborhood through a different lens.',location:'Old Town',starts_at:new Date(Date.now()+3*day).toISOString(),caption:'All skill levels welcome. Bring a sketchbook and meet us by the clock tower.',category:'Creative',cover_style:'sunset',image_url:null,capacity:null,created_at:new Date().toISOString(),requires_college_verification:false}
   ];
+  const moments=[{id:'40000000-0000-0000-0000-000000000001',author_id:other,username:'ravi',full_name:'Ravi Kumar',plan_id:plans[1].id,plan_title:'Sunday sketch walk',plan_location:'Old Town',body:'A lovely afternoon sketching with new friends. Already looking forward to the next walk.',hashtags:['creative'],like_count:3,comment_count:0,created_at:new Date().toISOString()}];
+  const messages=[{sender_id:other,body:'Looking forward to the picnic!',created_at:new Date().toISOString()}];
   const questions=[{id:'30000000-0000-0000-0000-000000000001',prompt:'Any dietary preferences?',type:'short_text',required:false,options:[]}];
   const swipes=[];
   const response=data=>({data,error:null});
@@ -34,7 +36,11 @@
       questions.splice(0,questions.length,...args.p_questions);
       return response({...plan,questions,confirmed_count:0});
     }
-    if(name==='search_discover')return response({events:plans.filter(p=>p.title.toLowerCase().includes(args.p_query.toLowerCase())),profiles:[],aftermath:[]});
+    if(name==='get_aftermath_feed')return response(moments);
+    if(name==='get_direct_message_inbox')return response([{other_id:other,username:'ravi',full_name:'Ravi Kumar',last_body:messages.at(-1).body,last_sender_id:messages.at(-1).sender_id,last_at:new Date().toISOString(),unread_count:1}]);
+    if(name==='get_direct_messages')return response(messages);
+    if(name==='send_direct_message'){messages.push({sender_id:owner,body:args.p_body,created_at:new Date().toISOString()});return response({});}
+    if(name==='search_discover'){const query=args.p_query.toLowerCase();return response({events:plans.filter(p=>(p.title+' '+p.location+' '+p.category).toLowerCase().includes(query)),profiles:profiles.filter(p=>(p.full_name+' '+p.username).toLowerCase().includes(query)),aftermath:moments.filter(p=>(p.body+' '+p.plan_title).toLowerCase().includes(query))});}
     return response([]);
   }};
   window.SUPABASE_URL='https://fixture.invalid';window.SUPABASE_ANON_KEY='fixture-only';

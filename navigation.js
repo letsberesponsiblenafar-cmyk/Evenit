@@ -171,7 +171,7 @@
     const nav=event.target.closest('[data-page]');
     if(nav){event.preventDefault();window.evenitRestoreAftermathSurface?.();closeMobileMenu();pushRoute(pageRoute(nav.dataset.page));return}
 
-    const discoverLink=event.target.closest('.rail-heading a');
+    const discoverLink=event.target.closest('.trending .rail-heading a');
     if(discoverLink){event.preventDefault();closeMobileMenu();pushRoute(pageRoute('discover'));}
   },true);
 
