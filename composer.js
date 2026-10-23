@@ -257,6 +257,12 @@
       form.reset();
       // Reset listeners clear dynamic questions on the next animation frame.
       await new Promise(resolve=>requestAnimationFrame(resolve));
+      // Preserve categories from older events even if the current create form
+      // no longer offers that exact label.
+      const category=form.elements.category;
+      if(plan.category&&![...category.options].some(option=>option.value===plan.category)){
+        category.add(new Option(plan.category,plan.category));
+      }
       for(const [key,value] of Object.entries({title:plan.title,tagline:plan.tagline,caption:plan.caption,category:plan.category,where:plan.location,plan_latitude:plan.latitude,plan_longitude:plan.longitude})){
         if(form.elements[key])form.elements[key].value=value??'';
       }
