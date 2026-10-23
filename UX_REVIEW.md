@@ -35,11 +35,12 @@ These changes aim to make discovery and participation more useful. Increased ret
 ## Access and release status
 
 - GitHub: authenticated access to `letsberesponsiblenafar-cmyk/Evenit` was confirmed, including repository push/admin permission.
-- Supabase: authenticated CLI/database access to the linked project was confirmed. The edit migration and regression checks were executed together inside a transaction that was rolled back. No test users, events, answers, or passes were retained.
-- Vercel: the production website was reachable. Authenticated deployment-management access was not available in this environment.
-- This change is committed locally. It has not been pushed or deployed, and the new migration has not been applied to production.
+- Supabase: migration `20261023120000_edit_upcoming_events.sql` was applied to the linked production project. The integration checks passed again after deployment inside a rollback-only transaction. No test users, events, answers, or passes were retained. A subsequent dry run confirmed the database is up to date.
+- GitHub: feature commit `7bcaad63a89cff7d923ffe3b0327e7b3d46b2d9d` was pushed to `main`.
+- Vercel: the existing GitHub integration deployed that commit successfully to Production. [Deployment result](https://vercel.com/letsberesponsiblenafar-5653s-projects/evenit/7oZqw6ob9gDhmo2nXgc6dx2vgVht). Direct CLI authentication was not needed.
+- The public site at [evenit.vercel.app](https://evenit.vercel.app) returned HTTP 200 for all seven changed frontend assets; their content matched the released source.
 
-Before deploying the frontend, apply `supabase/migrations/20261023120000_edit_upcoming_events.sql` through the normal migration process. The editor requires its new RPCs. Then deploy the committed web assets and rebuild/sync native applications as needed. The mobile asset-copy script includes the new modules and stylesheet.
+For other environments, apply `supabase/migrations/20261023120000_edit_upcoming_events.sql` before deploying the frontend: the editor requires its new RPCs. Rebuild/sync native applications as needed. The mobile asset-copy script includes the new modules and stylesheet.
 
 The earlier access review also found separate profile-administrator and private-follow authorization concerns. They remain outside this event/UX change and should be addressed in a security-focused follow-up.
 
@@ -51,4 +52,4 @@ The earlier access review also found separate profile-administrator and private-
 - Responsive checks at 390px and 320px browser widths; the editor and discovery page have no horizontal document overflow.
 - Local test fixture: `node scripts/preview-fixture.mjs`, then open `http://127.0.0.1:4174`. It replaces Supabase with synthetic accounts/events and does not write to the database. Fixtures reset on page reload; saved/hidden browser preferences persist.
 
-Native camera, actual email delivery, native-device builds, and live deployment were not exercised by this change.
+Native camera, actual email delivery, and native-device builds were not exercised by this change.
