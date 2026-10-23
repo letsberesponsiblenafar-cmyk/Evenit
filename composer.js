@@ -79,6 +79,11 @@
   const coverStatus=document.querySelector('#plan-cover-status');
   const previewPoster=document.querySelector('.preview-poster');
   let coverPreviewUrl='';
+  let existingCoverUrl='';
+  const removeCover=document.createElement('button');
+  removeCover.type='button';removeCover.className='composer-text-button';removeCover.textContent='Remove photo and use abstract cover';
+  coverStatus?.after(removeCover);
+  removeCover.onclick=()=>{if(coverUpload)coverUpload.value='';existingCoverUrl='';updateCoverPreview();form.dispatchEvent(new Event('input',{bubbles:true}));};
   function updateCoverPreview(){
     if(!previewPoster)return;
     const selected=form.querySelector('input[name="cover_style"]:checked')?.value||'aurora';
@@ -91,12 +96,17 @@
       previewPoster.style.backgroundSize='cover';
       previewPoster.style.backgroundPosition='center';
       if(coverStatus)coverStatus.textContent=`${file.name} will be used as this plan’s cover.`;
+    }else if(existingCoverUrl){
+      previewPoster.style.backgroundImage=`linear-gradient(0deg,rgba(18,15,40,.42),rgba(18,15,40,.04)),url(${JSON.stringify(existingCoverUrl)})`;
+      previewPoster.style.backgroundSize='cover';previewPoster.style.backgroundPosition='center';
+      if(coverStatus)coverStatus.textContent='Your current cover is kept. Upload a new photo to replace it.';
     }else{
       previewPoster.style.backgroundImage='';
       previewPoster.style.backgroundSize='';
       previewPoster.style.backgroundPosition='';
       if(coverStatus)coverStatus.textContent='No image selected — your chosen abstract cover will be used.';
     }
+    removeCover.hidden=!file&&!existingCoverUrl;
   }
   coverUpload?.addEventListener('change',updateCoverPreview);
   form.querySelectorAll('input[name="cover_style"]').forEach(input=>input.addEventListener('change',updateCoverPreview));
@@ -198,6 +208,7 @@
   function addQuestionRow(question={}){
     if(!questionList||questionRows().length>=10)return;
     const row=document.createElement('article');row.className='plan-question-row';
+    if(question.id)row.dataset.questionId=question.id;
     row.innerHTML='<div class="question-row-top"><span class="question-number">01</span><label class="question-prompt"><span class="sr-only">Question prompt</span><input data-plan-question type="text" maxlength="280" placeholder="Ask a question"></label><label class="question-type"><span class="sr-only">Answer type</span><select data-plan-question-type><option value="short_text">Short answer</option><option value="long_text">Long answer</option><option value="multiple_choice">Multiple choice</option><option value="checkboxes">Checkboxes</option></select></label></div><div class="question-options-editor" hidden></div><div class="question-row-footer"><label class="question-required"><input data-plan-question-required type="checkbox" checked><span>Required</span></label><button type="button" class="remove-plan-question" aria-label="Remove this question">Remove</button></div>';
     const prompt=row.querySelector('[data-plan-question]');const type=row.querySelector('[data-plan-question-type]');
     prompt.required=true;
@@ -220,7 +231,7 @@
   questionList?.addEventListener('input',validateQuestionFields);
   window.getPlanFormQuestions=()=>questionRows().map(row=>{
     const type=row.querySelector('[data-plan-question-type]').value;
-    return{prompt:row.querySelector('[data-plan-question]').value.trim(),type,required:row.querySelector('[data-plan-question-required]').checked,options:[...row.querySelectorAll('[data-question-option]')].map(option=>option.value.trim()).filter(Boolean)};
+    return{id:row.dataset.questionId||undefined,prompt:row.querySelector('[data-plan-question]').value.trim(),type,required:row.querySelector('[data-plan-question-required]').checked,options:[...row.querySelectorAll('[data-question-option]')].map(option=>option.value.trim()).filter(Boolean)};
   });
 
   usePlanLocation?.addEventListener('click',()=>{
@@ -231,11 +242,34 @@
       if(request!==locationRequest)return;
       const {latitude,longitude}=position.coords;form.elements.plan_latitude.value=String(latitude);form.elements.plan_longitude.value=String(longitude);
       if(!form.elements.where.value.trim())form.elements.where.value=`Current location · ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-      planLocationStatus.textContent='Current location selected. You can still edit the meeting-place name above.';usePlanLocation.disabled=false;usePlanLocation.textContent='✓ Current location selected';updatePreview();
+      planLocationStatus.textContent='Current location selected. You can still edit the meeting-place name above.';usePlanLocation.disabled=false;usePlanLocation.textContent='✓ Current location selected';updatePreview();form.dispatchEvent(new Event('input',{bubbles:true}));
     },error=>{if(request!==locationRequest)return;const message={1:'Location permission was not allowed.',2:'Your location is unavailable.',3:'Location lookup took too long.'}[error.code]||'Location lookup failed.';planLocationStatus.textContent=`${message} Add the meeting place manually instead.`;usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';},{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
   });
   document.addEventListener('click',event=>{if(event.target.closest('#open-modal,#profile-post'))document.querySelector('.sidebar')?.classList.remove('mobile-open');},true);
   form.addEventListener('input',updatePreview);form.addEventListener('change',updatePreview);
-  form.addEventListener('reset',()=>{locationRequest++;requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}composerSlides.showDetails();updateQuestionControls();updatePreview();updateCoverPreview();});});
+  form.addEventListener('reset',()=>{locationRequest++;existingCoverUrl='';requestAnimationFrame(()=>{questionList?.replaceChildren();form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';if(planLocationStatus)planLocationStatus.textContent='Choose a place, or use your device location to make nearby suggestions more accurate.';if(usePlanLocation){usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';}composerSlides.showDetails();updateQuestionControls();updatePreview();updateCoverPreview();});});
+  const clearLocation=document.createElement('button');clearLocation.type='button';clearLocation.className='composer-text-button';clearLocation.textContent='Clear device coordinates';
+  clearLocation.onclick=()=>{locationRequest++;form.elements.plan_latitude.value='';form.elements.plan_longitude.value='';planLocationStatus.textContent='Device coordinates removed. The meeting-place text is kept.';usePlanLocation.disabled=false;usePlanLocation.textContent='◎ Use my current location';form.dispatchEvent(new Event('input',{bubbles:true}));};
+  planLocationStatus?.after(clearLocation);
+  window.evenitComposer={
+    currentCover:()=>existingCoverUrl,
+    async load(plan){
+      form.reset();
+      // Reset listeners clear dynamic questions on the next animation frame.
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      for(const [key,value] of Object.entries({title:plan.title,tagline:plan.tagline,caption:plan.caption,category:plan.category,where:plan.location,plan_latitude:plan.latitude,plan_longitude:plan.longitude})){
+        if(form.elements[key])form.elements[key].value=value??'';
+      }
+      form.elements.when.value=window.EvenitEventTools.toLocalDateTime(plan.starts_at);
+      form.elements.requires_college_verification.checked=Boolean(plan.requires_college_verification);
+      const cover=[...form.querySelectorAll('[name="cover_style"]')].find(input=>input.value===plan.cover_style);
+      if(cover)cover.checked=true;
+      existingCoverUrl=plan.image_url||'';
+      (plan.questions||[]).forEach(addQuestionRow);
+      if(plan.latitude!=null)planLocationStatus.textContent='Saved device coordinates are kept. Choose a new location or clear them below.';
+      composerSlides.showDetails();updatePreview();updateCoverPreview();
+    },
+    showDetails:()=>composerSlides.showDetails()
+  };
   updateQuestionControls();updatePreview();updateCoverPreview();
 })();

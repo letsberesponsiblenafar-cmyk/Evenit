@@ -6,6 +6,7 @@ const output = resolve(root, 'mobile', 'www');
 const files = [
   'index.html', 'auth-callback.html', 'style.css', 'feed.css', 'composer.css', 'apple-polish.css',
   'experience-refresh.css', 'workspace.css', 'profile-refresh.css', 'interaction-refresh.css', 'scan-refresh.css', 'refinement.css',
+  'experience.css', 'experience.js', 'event-model.js', 'event-editor.js',
   'app.js', 'composer.js', 'navigation.js', 'shared-links.js', 'native-bridge.js', 'icons.js', 'app-update.json',
   'supabase-config.js', 'logo.svg', 'site.webmanifest',
   'assets/fonts/abask-regular.ttf', 'assets/brand/favicon-32.png', 'assets/brand/favicon-192.png',
