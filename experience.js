@@ -162,5 +162,10 @@
       }
     }catch(error){target.disabled=false;app.showToast(error.message||'Something went wrong. Please try again.');}
   });
-  requestAnimationFrame(()=>{loadHidden();if(app.pageView.hidden)app.renderHomeEventCards();renderRadar();});
+  requestAnimationFrame(()=>{
+    loadHidden();
+    if(app.pageView.hidden)app.renderHomeEventCards();
+    else if(app.pageView.querySelector('#discover-search'))app.renderDiscover();
+    renderRadar();
+  });
 })(typeof window!=='undefined'?window:globalThis);
